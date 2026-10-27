@@ -34,7 +34,13 @@ class BancoSupabase:
     e com o `sub` do token; a API nunca usa service_role no caminho de chat.
     """
 
-    def __init__(self, config: Config, token: str) -> None:
+    def __init__(
+        self,
+        config: Config,
+        token: str,
+        *,
+        transporte: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         if not config.supabase_url or not config.supabase_anon_key:
             raise ValueError("Supabase não configurado")
         if not token:
@@ -50,6 +56,7 @@ class BancoSupabase:
                 "Accept": "application/json",
                 "Content-Type": "application/json",
             },
+            transport=transporte,
         )
 
     async def fechar(self) -> None:
