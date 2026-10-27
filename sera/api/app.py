@@ -58,6 +58,11 @@ def criar_app(
         config.llm_model,
         "jwt" if config.auth_required else "dev",
     )
+    if config.auth_required and not config.emails_permitidos:
+        logger.warning(
+            "SERA_EMAILS não definido: qualquer conta autenticada pode usar "
+            "a API; feche o cadastro no Supabase ou defina a lista"
+        )
     if config.llm_provider == "openai" and config.base_incompleta:
         logger.warning(
             "LLM_BASE_URL=%r não termina em /v1 nem em /chat/completions; "
