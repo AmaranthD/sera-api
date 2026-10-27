@@ -23,7 +23,8 @@ Detalhes e trade-offs: `docs/adr/0004-deploy-cloudflare-render-supabase.md`.
 
 Projeto: `https://zcvnfxelcgcydopcdayc.supabase.co`
 
-Migration versionada em `supabase/migrations/20261027000000_init.sql`:
+Migrations versionadas em `supabase/migrations/` (`20261027000000_init.sql` e
+`20261027000001_busca_titulo.sql`):
 
 - tabelas `pessoas`, `conversas`, `mensagens`, `memorias`, `nao_mencionar`,
   `ajustes`, `notas`, `trechos`, `uso_llm`;
@@ -62,7 +63,8 @@ entram no repo: `.env`, `sera/api/.env` e `data/` estão no `.gitignore`.
 
 O `render.yaml` já descreve o serviço:
 
-- `runtime: docker`, `plan: free`, `region: oregon`;
+- `runtime: docker`, `plan: free`, `region: virginia` (ajuste para a região
+  mais próxima do seu projeto Supabase; o Render não tem região no Brasil);
 - healthcheck `/health`;
 - deploy automático a cada push em `main`;
 - variáveis públicas fixas e segredos com `sync: false`.
