@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+import anyio
 import httpx
 import jwt
 from fastapi import HTTPException, Request
@@ -79,7 +80,7 @@ class AutenticadorSupabase:
         return usuario
 
     async def _validar(self, token: str) -> Usuario:
-        claims = self._por_jwks(token)
+        claims = await anyio.to_thread.run_sync(self._por_jwks, token)
         if claims is None:
             claims = await self._por_introspeccao(token)
 
