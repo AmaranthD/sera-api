@@ -55,4 +55,5 @@ as $$
   limit greatest(coalesce(limite, 3), 0)
 $$;
 
+revoke execute on function public.buscar_trechos(text, int) from public, anon;
 grant execute on function public.buscar_trechos(text, int) to authenticated;

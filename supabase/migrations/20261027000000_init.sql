@@ -132,6 +132,7 @@ $$;
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant usage, select on all sequences in schema public to authenticated;
+revoke execute on function public.buscar_trechos(text, int) from public, anon;
 grant execute on function public.buscar_trechos(text, int) to authenticated;
 
 -- RLS: nenhuma tabela fica sem policy.
