@@ -164,4 +164,11 @@ async def usuario_atual(request: Request) -> Usuario | None:
     if esquema.lower() != "bearer" or not token:
         raise _nao_autorizado("Authorization Bearer ausente")
 
-    return await autenticador.validar(token)
+    usuario = await autenticador.validar(token)
+    if config.emails_permitidos:
+        email = (usuario.email or "").lower()
+        if email not in config.emails_permitidos:
+            raise HTTPException(
+                status_code=403, detail="e-mail não autorizado"
+            )
+    return usuario

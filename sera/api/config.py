@@ -64,6 +64,7 @@ class Config:
     supabase_jwt_aud: str = "authenticated"
     cors_origins: tuple[str, ...] = ()
     cors_origin_regex: str | None = None
+    emails_permitidos: tuple[str, ...] = ()
     auth_required: bool = False
 
     def __post_init__(self) -> None:
@@ -171,6 +172,11 @@ class Config:
                 if origem.strip()
             ),
             cors_origin_regex=opcional("CORS_ORIGIN_REGEX"),
+            emails_permitidos=tuple(
+                email.strip().lower()
+                for email in texto("SERA_EMAILS", "").split(",")
+                if email.strip()
+            ),
             auth_required=texto("SERA_DEV", "").lower()
             not in ("1", "true", "yes", "on"),
         )

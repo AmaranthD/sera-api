@@ -15,8 +15,11 @@ RAIZ = Path(__file__).resolve().parents[2]
 
 
 class FakeAutenticador:
-    def __init__(self, tokens: dict[str, str]) -> None:
+    def __init__(
+        self, tokens: dict[str, str], *, email: str | None = None
+    ) -> None:
         self.tokens = tokens
+        self.email = email
 
     async def validar(self, token: str) -> Usuario:
         pessoa_id = self.tokens.get(token)
@@ -26,7 +29,7 @@ class FakeAutenticador:
                 detail="token inválido",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        return Usuario(id=pessoa_id, token=token)
+        return Usuario(id=pessoa_id, token=token, email=self.email)
 
 
 @pytest.fixture
@@ -126,3 +129,25 @@ async def test_chat_usa_o_sub_quando_pessoa_id_e_omitido(cliente):
     assert resposta.status_code == 200
     nomes = [nome for nome, _ in eventos(resposta.text)]
     assert "done" in nomes
+
+
+async def test_allowlist_de_email(config):
+    from dataclasses import replace
+
+    banco = Banco(config.db_path)
+    app = criar_app(
+        replace(config, emails_permitidos=("maria@example.com",)),
+        llm=FakeLLM(),
+        banco=banco,
+        autenticador=FakeAutenticador(
+            {"token-maria": "maria"}, email="outra@example.com"
+        ),
+    )
+    transporte = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transporte, base_url="http://test"
+    ) as cliente:
+        resposta = await cliente.get(
+            "/pessoas", headers=_autorizacao("token-maria")
+        )
+        assert resposta.status_code == 403

@@ -54,6 +54,21 @@ No painel do Supabase:
 O PWA fará `supabase.auth.signInWithOtp({ email })` e enviará o
 `access_token` para a API.
 
+### Quem pode usar (recomendado fechar)
+
+Duas barreiras, complementares:
+
+1. **Supabase:** se for um grupo familiar fechado, desligue "Allow new users
+   to sign up" em Authentication → Providers → Email e crie/invite as contas
+   pelo painel.
+2. **API:** `SERA_EMAILS` (lista separada por vírgula, ex.
+   `maria@x.com,joao@x.com`) faz a API devolver `403` para qualquer token de
+   e-mail fora da lista. Sem a variável, qualquer conta autenticada entra —
+   aceitável só enquanto o cadastro estiver fechado no Supabase.
+
+O Render não define `SERA_EMAILS` por padrão; adicione no dashboard se quiser
+a lista fechada.
+
 ## 2. Repositório
 
 Código em `https://github.com/AmaranthD/sera-api` (público). Segredos não

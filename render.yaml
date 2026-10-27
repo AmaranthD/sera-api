@@ -35,3 +35,7 @@ services:
         value: "3"
       - key: SERA_MAX_CHARS_CONTEXTO
         value: "6000"
+      # Opcional: lista fechada de e-mails. Descomente e preencha para
+      # impedir que qualquer conta autenticada use a API.
+      # - key: SERA_EMAILS
+      #   sync: false
