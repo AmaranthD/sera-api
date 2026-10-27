@@ -7,3 +7,5 @@ data/
 *.egg-info/
 .agents/
 skills-lock.json
+dist/
+build/
