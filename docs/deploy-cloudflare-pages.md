@@ -36,12 +36,18 @@ Supabase.
 
 | Campo | Valor |
 |---|---|
+| Project name | `sera-conversa` (o subdomínio é único; `sera.pages.dev` já está em uso) |
 | Production branch | `main` |
 | Framework preset | `None` (ou `Vite`) |
 | Root directory | `web` |
 | Build command | `npm ci && npm run build` |
 | Build output directory | `dist` |
 | Node version | `22` (variável `NODE_VERSION=22` ou `web/.nvmrc`) |
+
+O **Project name** define a URL `https://<nome>.pages.dev`. Ele é único no
+mundo inteiro: `sera`, `sera-web` e `sera-ai` já estão ocupados. Se o nome
+desejado não estiver disponível, escolha outro (ex.: `sera-conversa`,
+`sera-familia`, `sera-assistente`) ou use um domínio próprio.
 
 4. Em **Environment variables**, adicione somente variáveis públicas:
 

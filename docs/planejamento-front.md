@@ -587,7 +587,7 @@ produção e o link mágico cai na origem certa.
 
 | Tema | Recomendação |
 |---|---|
-| Domínio e nome do projeto Pages | `app.<dominio>` / projeto `sera-web` ou `sera` |
+| Domínio e nome do projeto Pages | `app.<dominio>` / projeto `sera-conversa` (o subdomínio `sera.pages.dev` já está em uso) |
 | Ícone/logo | decidido: monograma "S" em `public/favicon.svg`, PNGs gerados por `npm run icones` |
 | Markdown nas respostas | adiar; se entrar, `react-markdown` + `rehype-sanitize` e CSP revisada |
 | Cache offline de histórico | não no MVP; se pedirem, opt-in com IndexedDB + botão "limpar dados neste dispositivo" |
