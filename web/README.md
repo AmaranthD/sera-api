@@ -132,13 +132,18 @@ O E2E roda `npm run build` + `npm run preview` na porta 4317 (configurado em
 
 ## Deploy
 
-Passo a passo em `../docs/deploy-cloudflare-pages.md`. Resumo do Pages:
+Passo a passo em `../docs/deploy-cloudflare-pages.md` (Pages) ou
+`../docs/deploy-cloudflare-workers.md` (Workers com assets estáticos — é o
+fluxo usado hoje). Resumo:
 
-- root directory `web`;
-- build `npm ci && npm run build`;
-- output `dist`;
+- build `npm ci && npm run build` dentro de `web/`;
+- publicar `web/dist`;
 - Node 22;
-- variáveis `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_URL`.
+- variáveis de **build** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+  `VITE_API_URL` (e `NODE_VERSION=22`).
+
+Para Workers, o `wrangler.jsonc` da raiz aponta para `./web/dist` e ativa o
+fallback de SPA.
 
 CI em `.github/workflows/web.yml` roda lint, format, typecheck, testes, build
 e Playwright em Node 22.

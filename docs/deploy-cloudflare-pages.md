@@ -7,6 +7,12 @@ documento é o passo a passo para publicar e validar.
 O desenho completo está em `docs/planejamento-front.md` e a decisão de
 arquitetura em `docs/adr/0005-front-react-pages.md`.
 
+> **Deploy atual:** o Cloudflare pode oferecer o fluxo novo de **Workers com
+> assets estáticos** em vez de Pages. Se você já tem uma URL
+> `https://<worker>.<account>.workers.dev` ou caiu no build que roda
+> `pip install .`, siga `docs/deploy-cloudflare-workers.md`. Os dois caminhos
+> publicam o mesmo `web/dist`.
+
 ## Visão geral
 
 | Peça | Onde fica |
