@@ -142,8 +142,8 @@ fluxo usado hoje). Resumo:
 - variáveis de **build** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
   `VITE_API_URL` (e `NODE_VERSION=22`).
 
-Para Workers, o `wrangler.jsonc` da raiz aponta para `./web/dist` e ativa o
-fallback de SPA.
+Para Workers, crie um `wrangler.jsonc` na raiz apontando para `./web/dist` e
+ativando o fallback de SPA (não use esse arquivo no fluxo Pages).
 
 CI em `.github/workflows/web.yml` roda lint, format, typecheck, testes, build
 e Playwright em Node 22.

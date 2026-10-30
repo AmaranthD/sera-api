@@ -29,11 +29,16 @@ O correto é:
 1. rodar `npm ci && npm run build` dentro de `web/`;
 2. publicar `web/dist`, que contém o HTML/CSS/JS compilados, o manifest e o
    service worker;
-3. deixar o `wrangler.jsonc` da raiz apontar para `./web/dist`.
+3. criar um `wrangler.jsonc` na raiz apontando para `./web/dist` (somente se
+   for usar Workers).
 
 ## 1. Configuração no repositório
 
-O arquivo `wrangler.jsonc` na raiz já faz isso:
+Se você for usar Workers, crie `wrangler.jsonc` na raiz:
+
+> Não deixe esse arquivo no repositório se estiver usando **Pages**: o Pages
+> tenta lê-lo e avisa que falta `pages_build_output_dir`. Ele é específico do
+> fluxo Workers.
 
 ```jsonc
 {
@@ -168,11 +173,11 @@ Isso troca só os assets; API e banco não são afetados.
 | Build | build command + output dir | build command + `wrangler.jsonc` |
 | `_headers` / `_redirects` | sim | sim |
 | SPA fallback | `_redirects` | `not_found_handling` |
-| Uso neste projeto | documentado | **usado no deploy atual** |
+| Uso neste projeto | **fluxo principal** | alternativa documentada |
 
-Os dois servem o mesmo `web/dist`. Se um dia quiser migrar para Pages, o
-`wrangler.jsonc` não atrapalha: basta criar o projeto Pages com root `web`,
-build `npm ci && npm run build` e output `dist`.
+Os dois servem o mesmo `web/dist`. Para migrar de Workers para Pages, apague
+o `wrangler.jsonc` e crie o projeto Pages com root `web`, build
+`npm ci && npm run build` e output `dist`.
 
 ## 8. Apagar um Worker antigo
 
