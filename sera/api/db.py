@@ -186,8 +186,12 @@ class Banco:
     async def apagar_pessoa(self, pessoa_id: str) -> bool:
         return await to_thread.run_sync(self._apagar_pessoa, pessoa_id)
 
-    async def criar_conversa(self, pessoa_id: str) -> dict:
-        return await to_thread.run_sync(self._criar_conversa, pessoa_id)
+    async def criar_conversa(
+        self, pessoa_id: str, titulo: str | None = None
+    ) -> dict:
+        return await to_thread.run_sync(
+            self._criar_conversa, pessoa_id, titulo
+        )
 
     async def obter_conversa(self, conversa_id: str) -> dict | None:
         return await to_thread.run_sync(self._obter_conversa, conversa_id)
@@ -312,15 +316,17 @@ class Banco:
             cursor = conn.execute("DELETE FROM pessoas WHERE id = ?", (pessoa_id,))
             return cursor.rowcount > 0
 
-    def _criar_conversa(self, pessoa_id: str) -> dict:
+    def _criar_conversa(
+        self, pessoa_id: str, titulo: str | None = None
+    ) -> dict:
         conversa_id = _novo_id()
         momento = agora()
         with self._conexao() as conn:
             conn.execute(
                 "INSERT INTO conversas "
                 "(id, pessoa_id, titulo, criada_em, atualizada_em) "
-                "VALUES (?, ?, NULL, ?, ?)",
-                (conversa_id, pessoa_id, momento, momento),
+                "VALUES (?, ?, ?, ?, ?)",
+                (conversa_id, pessoa_id, titulo, momento, momento),
             )
             return dict(
                 conn.execute(

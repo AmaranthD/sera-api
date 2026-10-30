@@ -41,6 +41,40 @@ async def test_streaming_devolve_tokens_e_done(cliente, fake):
     assert fake.max_tokens == 1024
 
 
+async def test_streaming_comeca_com_start(cliente):
+    await criar_pessoa(cliente)
+
+    resposta = await cliente.post(
+        "/chat", json={"pessoa_id": "maria", "mensagem": "Oi, Sera"}
+    )
+    ev = eventos(resposta.text)
+
+    assert ev[0][0] == "start"
+    start = ev[0][1]
+    done = next(dados for nome, dados in ev if nome == "done")
+    assert start["conversa_id"] == done["conversa_id"]
+    assert start["mensagem_id"]
+
+    mensagens = await cliente.get(
+        f"/conversas/{start['conversa_id']}/mensagens"
+    )
+    assert mensagens.json()[0]["id"] == start["mensagem_id"]
+
+
+async def test_titulo_da_conversa_vem_da_primeira_mensagem(cliente):
+    await criar_pessoa(cliente)
+    mensagem = "  Quero   conversar sobre o almoço de domingo com a família  "
+
+    await cliente.post(
+        "/chat", json={"pessoa_id": "maria", "mensagem": mensagem}
+    )
+    conversas = await cliente.get("/pessoas/maria/conversas")
+
+    assert conversas.json()[0]["titulo"] == (
+        "Quero conversar sobre o almoço de domingo com a família"
+    )
+
+
 async def test_streaming_persiste_pergunta_e_resposta(cliente):
     await criar_pessoa(cliente)
     resposta = await cliente.post(

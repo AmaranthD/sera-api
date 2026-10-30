@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sera">
+  <rect width="512" height="512" rx="116" fill="#1e4b3d"/>
+  <circle cx="256" cy="256" r="188" fill="none" stroke="#faf7ee" stroke-opacity="0.14" stroke-width="2"/>
+  <text x="256" y="352" text-anchor="middle"
+        font-family="Georgia, 'Iowan Old Style', 'Palatino Linotype', 'DejaVu Serif', serif"
+        font-size="300" fill="#faf7ee">S</text>
+</svg>

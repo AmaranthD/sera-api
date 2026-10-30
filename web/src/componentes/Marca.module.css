@@ -1,0 +1,70 @@
+.marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--verde-escuro);
+}
+
+.monograma {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--verde);
+  color: var(--paper-alto);
+  font-family: var(--fonte-titulo);
+  font-size: 26px;
+  line-height: 1;
+  padding-bottom: 2px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  flex: none;
+}
+
+.texto {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.1;
+}
+
+.nome {
+  font-family: var(--fonte-titulo);
+  font-size: 27px;
+  letter-spacing: 0.01em;
+}
+
+.legenda {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tinta-fraca);
+}
+
+.clara {
+  color: var(--paper-alto);
+}
+
+.clara .monograma {
+  background: var(--paper-alto);
+  color: var(--verde-escuro);
+}
+
+.clara .legenda {
+  color: rgba(250, 247, 238, 0.66);
+}
+
+.pequena .monograma {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  font-size: 20px;
+}
+
+.pequena .nome {
+  font-size: 21px;
+}
+
+.somenteMonograma {
+  gap: 0;
+}

@@ -1,0 +1,9 @@
+.instrucao {
+  font-size: 13px;
+  color: var(--tinta-fraca);
+  line-height: 1.45;
+}
+
+.instrucao strong {
+  color: var(--tinta-suave);
+}

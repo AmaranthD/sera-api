@@ -1,0 +1,29 @@
+.falha {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.falhaCartao {
+  width: min(460px, 100%);
+  padding: 30px;
+  border: 1px solid var(--linha);
+  border-radius: 24px;
+  background: var(--superficie);
+  box-shadow: var(--sombra);
+}
+
+.falhaTitulo {
+  margin: 24px 0 16px;
+  font-family: var(--fonte-titulo);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.falhaAcoes {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+}

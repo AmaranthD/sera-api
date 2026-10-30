@@ -356,12 +356,15 @@ Custo total realista: **~US$ 7/mês + tokens do LLM**. Se o objetivo for zero, R
 **Critério de aceite:** `curl` sem token → 401; com token de A pedindo conversa de B → 404/403; streaming continua funcionando.
 
 ### Fase 3 — PWA
-- [ ] Login (OTP) e persistência de sessão
-- [ ] Onboarding: nome + faixa etária (obrigatório)
-- [ ] Lista de conversas, abrir conversa, enviar mensagem
-- [ ] Consumo de SSE com render incremental e botão de interromper
-- [ ] Shell offline (abre sem rede; enviar exige rede)
-- [ ] Instalável (manifest + ícones + service worker)
+
+Detalhamento executável em `docs/planejamento-front.md`.
+
+- [x] Login (OTP) e persistência de sessão
+- [x] Onboarding: nome + faixa etária (obrigatório)
+- [x] Lista de conversas, abrir conversa, enviar mensagem
+- [x] Consumo de SSE com render incremental e botão de interromper
+- [x] Shell offline (abre sem rede; enviar exige rede)
+- [x] Instalável (manifest + ícones + service worker)
 
 **Critério de aceite:** conversa completa no celular, resposta aparecendo token a token, recarregar mantém o histórico.
 

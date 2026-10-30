@@ -332,14 +332,18 @@ async def chat(
         if conversa is None or conversa["pessoa_id"] != pessoa_id:
             raise HTTPException(status_code=404, detail="conversa não encontrada")
     else:
-        conversa = await banco.criar_conversa(pessoa_id)
+        conversa = await banco.criar_conversa(
+            pessoa_id, _titulo_da_mensagem(corpo.mensagem)
+        )
 
     historico = await banco.ultimas_mensagens(
         conversa["id"], config.max_history_mensagens
     )
     _cortar_historico(historico, config.max_history_chars)
 
-    await banco.criar_mensagem(conversa["id"], "user", corpo.mensagem)
+    mensagem_usuario = await banco.criar_mensagem(
+        conversa["id"], "user", corpo.mensagem
+    )
 
     system = await _montar_system(
         personality, linha_pessoa, banco, config, corpo.mensagem
@@ -356,7 +360,13 @@ async def chat(
         )
 
     return await _resposta_stream(
-        request, banco, llm, config, conversa["id"], mensagens
+        request,
+        banco,
+        llm,
+        config,
+        conversa["id"],
+        mensagem_usuario["id"],
+        mensagens,
     )
 
 
@@ -458,6 +468,7 @@ async def _resposta_stream(
     llm: ClienteLLM,
     config: Config,
     conversa_id: str,
+    mensagem_usuario_id: str,
     mensagens: list[dict],
 ) -> StreamingResponse:
     fluxo = llm.stream(
@@ -478,6 +489,13 @@ async def _resposta_stream(
     async def gerar():
         partes: list[str] = []
         uso: Uso | None = None
+        yield _sse(
+            "start",
+            {
+                "conversa_id": conversa_id,
+                "mensagem_id": mensagem_usuario_id,
+            },
+        )
         try:
             async for evento in _encadear(primeiro, fluxo):
                 if isinstance(evento, Delta):
@@ -554,6 +572,17 @@ def _cortar_historico(historico: list[dict], limite: int) -> None:
 
 def _sse(evento: str, dados: dict) -> str:
     return f"event: {evento}\ndata: {json.dumps(dados, ensure_ascii=False)}\n\n"
+
+
+def _titulo_da_mensagem(texto: str, limite: int = 60) -> str:
+    """Primeira frase da mensagem, curta o bastante para a lista lateral."""
+    limpo = " ".join(texto.split())
+    if len(limpo) <= limite:
+        return limpo
+    corte = limpo.rfind(" ", 0, limite)
+    if corte < limite // 2:
+        corte = limite
+    return f"{limpo[:corte].rstrip(' ,.;:!?')}…"
 
 
 def _uso_dict(uso: Uso | None) -> dict | None:

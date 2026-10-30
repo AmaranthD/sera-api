@@ -51,7 +51,7 @@ No painel do Supabase:
 3. Para produção, configurar SMTP próprio (o e-mail de teste do Supabase tem
    limite baixo).
 
-O PWA fará `supabase.auth.signInWithOtp({ email })` e enviará o
+O PWA faz `supabase.auth.signInWithOtp({ email })` e envia o
 `access_token` para a API.
 
 ### Quem pode usar (recomendado fechar)
@@ -130,7 +130,11 @@ Cenários negativos esperados:
 - `POST /chat` com `pessoa_id` de outra pessoa → `403`;
 - conversa de outra pessoa → `404` (RLS esconde a linha).
 
-## 4. Cloudflare Pages (PWA, depois)
+## 4. Cloudflare Pages (PWA)
+
+O front está implementado em `web/` (React + Vite, escopo da Fase 3). O passo
+a passo de publicação, smoke test e rollback está em
+`docs/deploy-cloudflare-pages.md`; as decisões estão no ADR 0005.
 
 Variáveis públicas do Pages:
 
@@ -144,10 +148,14 @@ Nunca colocar no Pages: `service_role`, `DATABASE_URL`, `LLM_API_KEY` ou
 qualquer segredo de servidor. A `anon/publishable` é pública por desenho.
 
 O `CORS_ORIGINS` no Render precisa bater exatamente com a origem do Pages.
-Para previews, o regex `https://.*\.pages\.dev` já cobre.
+Para previews, o regex `https://.*\.pages\.dev` já cobre, mas produção deve
+usar a origem exata.
 
 ## 5. O que ainda falta (fase 4)
 
+- **Publicar o front:** criar o projeto no Cloudflare Pages, definir as três
+  `VITE_*`, ajustar `CORS_ORIGINS` e as Redirect URLs do Supabase, e rodar o
+  smoke test de `docs/deploy-cloudflare-pages.md`.
 - **Indexar notas no Supabase:** o índice é global e só `service_role`
   escreve. Fazer um job fora da API (script local ou Render Cron) que leia o
   vault e faça upsert em `notas`/`trechos`. A leitura já funciona via
@@ -155,5 +163,3 @@ Para previews, o regex `https://.*\.pages\.dev` já cobre.
 - **Registrar custo:** a tabela `uso_llm` existe; falta a API gravar tokens
   por mensagem.
 - **Rate limit** por pessoa no `/chat`.
-- **PWA:** login OTP, onboarding (`nome` + `faixa_etaria`), lista de
-  conversas, SSE incremental, service worker.

@@ -1,0 +1,149 @@
+:root {
+  --paper: #f3eee3;
+  --paper-alto: #faf7ee;
+  --superficie: #fffdf8;
+  --tinta: #18241f;
+  --tinta-suave: #4c5c54;
+  --tinta-fraca: #6f7d76;
+  --verde: #1e4b3d;
+  --verde-escuro: #12332a;
+  --verde-claro: #dfe9e1;
+  --verde-lavado: #edf2ec;
+  --terracota: #b95f40;
+  --terracota-claro: #f4e1d8;
+  --linha: rgba(24, 36, 31, 0.12);
+  --linha-forte: rgba(24, 36, 31, 0.22);
+  --sombra: 0 18px 50px rgba(30, 50, 42, 0.1);
+  --sombra-suave: 0 6px 20px rgba(30, 50, 42, 0.07);
+  --raio: 18px;
+  --raio-pequeno: 12px;
+  --fonte:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  --fonte-titulo:
+    'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+  --foco: 0 0 0 3px rgba(30, 75, 61, 0.34);
+  --max-largura: 1240px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--fonte);
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--tinta);
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(
+      circle at 12% 8%,
+      rgba(255, 253, 248, 0.9) 0,
+      rgba(255, 253, 248, 0) 34%
+    ),
+    radial-gradient(
+      circle at 88% 92%,
+      rgba(30, 75, 61, 0.07) 0,
+      rgba(30, 75, 61, 0) 38%
+    );
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: var(--verde);
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--foco);
+  border-radius: 6px;
+}
+
+::selection {
+  background: var(--verde-claro);
+  color: var(--verde-escuro);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.pularParaConteudo {
+  position: absolute;
+  left: 12px;
+  top: -80px;
+  z-index: 100;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--verde);
+  color: var(--papel);
+  text-decoration: none;
+  transition: top 150ms ease;
+}
+
+.pularParaConteudo:focus {
+  top: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

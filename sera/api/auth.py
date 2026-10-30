@@ -125,7 +125,7 @@ class AutenticadorSupabase:
                 status_code=503, detail="autenticação indisponível"
             ) from erro
 
-        if resposta.status_code == 401:
+        if resposta.status_code in (401, 403):
             raise _nao_autorizado()
         if resposta.status_code >= 400:
             logger.warning(

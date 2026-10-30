@@ -1,0 +1,54 @@
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--raio-pequeno);
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.icone {
+  flex: none;
+  margin-top: 1px;
+}
+
+.erro {
+  background: var(--terracota-claro);
+  border-color: rgba(185, 95, 64, 0.28);
+  color: #6e2f1b;
+}
+
+.info {
+  background: var(--verde-lavado);
+  border-color: rgba(30, 75, 61, 0.18);
+  color: var(--verde-escuro);
+}
+
+.aviso {
+  background: #f7edd7;
+  border-color: rgba(150, 110, 35, 0.24);
+  color: #6b4d13;
+}
+
+.sucesso {
+  background: var(--verde-claro);
+  border-color: rgba(30, 75, 61, 0.2);
+  color: var(--verde-escuro);
+}
+
+.conteudo {
+  flex: 1;
+}
+
+.acao {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: underline;
+  padding: 2px 4px;
+}

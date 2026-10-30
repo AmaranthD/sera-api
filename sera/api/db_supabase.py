@@ -153,11 +153,13 @@ class BancoSupabase:
         )
         return bool(dados)
 
-    async def criar_conversa(self, pessoa_id: str) -> dict:
+    async def criar_conversa(
+        self, pessoa_id: str, titulo: str | None = None
+    ) -> dict:
         dados = await self._req(
             "POST",
             "conversas",
-            corpo={"pessoa_id": pessoa_id},
+            corpo={"pessoa_id": pessoa_id, "titulo": titulo},
             prefer="return=representation",
         )
         return _um(dados)
