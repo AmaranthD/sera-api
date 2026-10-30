@@ -12,6 +12,11 @@ arquitetura em `docs/adr/0005-front-react-pages.md`.
 > `https://<worker>.<account>.workers.dev` ou caiu no build que roda
 > `pip install .`, siga `docs/deploy-cloudflare-workers.md`. Os dois caminhos
 > publicam o mesmo `web/dist`.
+>
+> **Já criou um Worker que está servindo `web/` cru?** Crie o projeto Pages
+> primeiro, valide a URL nova e só então apague o Worker em
+> **Settings → Delete**. Assim você não fica sem nenhum endereço no meio do
+> caminho.
 
 ## Visão geral
 

@@ -173,3 +173,17 @@ Isso troca só os assets; API e banco não são afetados.
 Os dois servem o mesmo `web/dist`. Se um dia quiser migrar para Pages, o
 `wrangler.jsonc` não atrapalha: basta criar o projeto Pages com root `web`,
 build `npm ci && npm run build` e output `dist`.
+
+## 8. Apagar um Worker antigo
+
+Só faça isso depois que a URL nova (Pages ou outro Worker) estiver
+funcionando.
+
+1. **Workers & Pages** → Worker antigo.
+2. **Settings** → role até o fim.
+3. **Delete** / **Delete Worker**.
+4. Digite o nome do Worker para confirmar.
+
+Se houver um domínio personalizado apontando para ele, remova o domínio
+antes. A URL `https://<worker>.<account>.workers.dev` deixa de responder
+assim que o Worker é apagado.
