@@ -179,6 +179,13 @@
   margin-top: -6px;
 }
 
+.avisoEnvio {
+  margin: -12px 0 20px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--tinta-fraca);
+}
+
 @media (max-width: 900px) {
   .pagina {
     grid-template-columns: 1fr;

@@ -1,7 +1,7 @@
 # Planejamento — front (PWA) no Cloudflare Pages conectado à API
 
-> **Status em 2026-10-29:** fases 0 a 3 implementadas em `web/` e verificadas
-> com lint, typecheck, 57 testes unitários/componente, 6 E2E e build de
+> **Status em 2026-10-31:** fases 0 a 3 implementadas em `web/` e verificadas
+> com lint, typecheck, 62 testes unitários/componente, 6 E2E e build de
 > produção. O que depende de conta externa — criar o projeto no Cloudflare
 > Pages, configurar Redirect URLs de produção e rodar a matriz manual de
 > aparelhos — continua pendente e está marcado nas fases. Decisões fechadas:
@@ -459,7 +459,7 @@ automático nos dois. Ao trocar para domínio próprio:
 | A11y | axe (no Playwright ou Vitest) | login, onboarding e chat sem violações sérias; navegação só por teclado |
 | Manual | matriz de dispositivos | iOS Safari (PWA), Android Chrome, desktop; 3G lento; cold start do Render; link mágico com SW ativo |
 
-- Arena de testes implementada: 57 testes Vitest (parser, HTTP, contrato,
+- Arena de testes implementada: 62 testes Vitest (parser, HTTP, contrato,
   domínio, login, onboarding e componentes) e 6 E2E Playwright com Supabase
   falso. A matriz de dispositivo e o axe automatizado continuam
   manuais/pendentes.

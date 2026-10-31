@@ -56,6 +56,7 @@ describe('Login', () => {
       await screen.findByRole('heading', { name: 'Confira seu e-mail' }),
     ).toBeInTheDocument()
     expect(screen.getByText('maria@exemplo.com')).toBeInTheDocument()
+    expect(screen.getByText(/Confira o spam ou lixo eletrônico/)).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /Reenviar acesso em \d+s/ }),
     ).toBeDisabled()

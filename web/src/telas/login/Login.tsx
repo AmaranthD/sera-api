@@ -153,6 +153,10 @@ export function Login() {
                 <span className={estilos.destaque}>{email}</span>. Abra o link no mesmo
                 aparelho em que você está agora.
               </p>
+              <p className={estilos.avisoEnvio}>
+                Não recebeu? Confira o spam ou lixo eletrônico. O envio pode levar
+                alguns minutos.
+              </p>
 
               {erro ? <Banner tipo="erro">{erro}</Banner> : null}
 

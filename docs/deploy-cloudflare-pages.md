@@ -108,6 +108,17 @@ Authentication → URL Configuration:
 O front manda `emailRedirectTo` com `window.location.origin`, então o link
 volta para a mesma origem em que a pessoa pediu o acesso.
 
+### E-mail de login (SMTP)
+
+O SMTP padrão do Supabase é **só para teste**: envia no máximo **2 e-mails por
+hora** e somente para endereços da equipe do projeto. Para qualquer outro
+endereço, o envio falha (ou é bloqueado sem aviso claro no cliente).
+
+Para a família usar de verdade, configure um SMTP próprio em
+**Authentication → Emails → SMTP Settings** (Resend, Brevo, SendGrid,
+Postmark etc.) e ajuste o limite em **Authentication → Rate Limits**. Confira
+os erros em **Authentication → Logs**.
+
 ### Render
 
 No dashboard do Render, ajuste `CORS_ORIGINS` para a origem exata:
@@ -168,6 +179,7 @@ dispare **Retry deployment** no deployment desejado.
 | CORS no `/chat` | origem do Pages fora de `CORS_ORIGINS` | Atualize no Render e redeploy |
 | Shell antigo após deploy | SW servindo cache anterior | O app mostra "nova versão"; recarregue. Em último caso, limpe o site data |
 | Login falha só com SW ativo | shell velho perdeu o `?code=` | O SW usa `autoUpdate` e não cacheia `/chat`; limpe o cache e tente de novo |
+| E-mail/código não chega | SMTP padrão do Supabase (2/h e só equipe) | Configure SMTP próprio e confira Authentication → Logs |
 
 ## 7. Segurança
 
