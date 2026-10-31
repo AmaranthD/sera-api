@@ -45,7 +45,7 @@ Colocar a Sera em uso diário, acessível de qualquer dispositivo, sem depender 
 └──────────────┬──────────────┘
                │ HTTPS
                ▼
-        NVIDIA NIM (glm-5.3)
+        NVIDIA NIM (MiniMax M3.1 Flash)
 ```
 
 **Fluxo de uma mensagem**
@@ -282,7 +282,7 @@ SUPABASE_JWT_AUD=authenticated
 LLM_PROVIDER=openai
 LLM_BASE_URL=https://integrate.api.nvidia.com/v1
 LLM_API_KEY=<nvapi-...>
-LLM_MODEL=z-ai/glm-5.3
+LLM_MODEL=minimaxai/minimax-m3.1-flash
 LLM_MAX_TOKENS=4096
 CORS_ORIGINS=https://app.<dominio>
 SERA_NOTAS=/app/notas

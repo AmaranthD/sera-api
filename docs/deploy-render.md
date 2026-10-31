@@ -101,6 +101,21 @@ Passos:
 > serviço no dashboard. A variável `VITE_API_URL` do Pages precisa ser
 > exatamente essa URL.
 
+### Modelo do LLM
+
+O `LLM_MODEL` vem do ambiente e pode ser trocado no dashboard sem alterar o
+código. Em 2026-10-31 o modelo anterior (`z-ai/glm-5.3`) foi desligado pela
+NVIDIA. O substituto em uso é:
+
+```
+LLM_MODEL=minimaxai/minimax-m3.1-flash
+```
+
+Ele responde em português, faz streaming e levou ~4 s no teste local. Para
+trocar, edite **Environment → LLM_MODEL**, salve e espere o redeploy. Modelos
+de raciocínio podem gastar parte de `LLM_MAX_TOKENS` antes do texto; mantenha
+`LLM_MAX_TOKENS=4096` para não truncar respostas.
+
 > **Free tier:** o serviço hiberna após ~15 min sem tráfego. A primeira
 > mensagem do dia espera o cold start (30–60 s). Se incomodar, o plano
 > Starter (~US$ 7/mês) remove a hibernação. O Supabase free pausa o projeto
