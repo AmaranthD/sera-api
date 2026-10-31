@@ -83,7 +83,7 @@ No Cloudflare:
 ```
 VITE_SUPABASE_URL=https://zcvnfxelcgcydopcdayc.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon/publishable key>
-VITE_API_URL=https://sera-api.onrender.com
+VITE_API_URL=https://sera-api-8n2k.onrender.com
 NODE_VERSION=22
 ```
 

@@ -21,7 +21,7 @@ final.
 1. **SPA React + TypeScript + Vite** em `web/`, no mesmo repositório da API,
    publicada como estático no Cloudflare Pages.
 2. **Sem Pages Functions e sem proxy.** O navegador chama
-   `https://sera-api.onrender.com` com `Authorization: Bearer
+   `https://sera-api-8n2k.onrender.com` com `Authorization: Bearer
    <access_token>`. A origem exata entra em `CORS_ORIGINS`.
 3. **supabase-js só para Auth.** Login por OTP (link mágico + código),
    sessão em `localStorage`, `flowType: 'pkce'` e `autoRefreshToken`. O banco

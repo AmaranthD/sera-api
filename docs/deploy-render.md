@@ -95,6 +95,12 @@ Passos:
      (o regex `*.pages.dev` já está liberado para previews).
 4. Deploy. O primeiro build instala as dependências e sobe o uvicorn.
 
+> **URL pública:** o Render adiciona um sufixo quando o nome do serviço já
+> está em uso. A URL deste projeto é
+> `https://sera-api-8n2k.onrender.com` — copie a que aparece no topo do
+> serviço no dashboard. A variável `VITE_API_URL` do Pages precisa ser
+> exatamente essa URL.
+
 > **Free tier:** o serviço hiberna após ~15 min sem tráfego. A primeira
 > mensagem do dia espera o cold start (30–60 s). Se incomodar, o plano
 > Starter (~US$ 7/mês) remove a hibernação. O Supabase free pausa o projeto
@@ -103,24 +109,24 @@ Passos:
 ### Verificação
 
 ```bash
-curl https://sera-api.onrender.com/health
+curl https://sera-api-8n2k.onrender.com/health
 # {"status":"ok"}
 
 # token obtido no PWA via supabase.auth.getSession()
 TOKEN='<access_token>'
 
 curl -H "Authorization: Bearer $TOKEN" \
-  https://sera-api.onrender.com/pessoas
+  https://sera-api-8n2k.onrender.com/pessoas
 
 # onboarding (primeiro login) — id vem do sub, não do corpo
 curl -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"nome":"Maria","faixa_etaria":"adulto"}' \
-  https://sera-api.onrender.com/pessoas
+  https://sera-api-8n2k.onrender.com/pessoas
 
 # conversa em SSE
 curl -N -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"mensagem":"Oi, Sera"}' \
-  https://sera-api.onrender.com/chat
+  https://sera-api-8n2k.onrender.com/chat
 ```
 
 Cenários negativos esperados:
@@ -141,7 +147,7 @@ Variáveis públicas do Pages:
 ```
 VITE_SUPABASE_URL=https://zcvnfxelcgcydopcdayc.supabase.co
 VITE_SUPABASE_ANON_KEY=<publishable/anon key>
-VITE_API_URL=https://sera-api.onrender.com
+VITE_API_URL=https://sera-api-8n2k.onrender.com
 ```
 
 Nunca colocar no Pages: `service_role`, `DATABASE_URL`, `LLM_API_KEY` ou

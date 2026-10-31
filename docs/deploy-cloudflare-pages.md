@@ -65,8 +65,12 @@ desejado não estiver disponível, escolha outro (ex.: `sera-conversa`,
 ```
 VITE_SUPABASE_URL=https://zcvnfxelcgcydopcdayc.supabase.co
 VITE_SUPABASE_ANON_KEY=<publishable/anon key>
-VITE_API_URL=https://sera-api.onrender.com
+VITE_API_URL=https://sera-api-8n2k.onrender.com
 ```
+
+> Use a URL exata mostrada no topo do serviço no Render. O nome `sera-api`
+> já estava em uso, então o Render acrescentou o sufixo `-8n2k`. Trocar por
+> `sera-api.onrender.com` faz o app falhar com “Sem conexão com a Sera”.
 
 > **Nunca** coloque `service_role`, `DATABASE_URL`, `LLM_API_KEY` ou senha do
 > banco no Pages. Tudo em `VITE_*` vai para o bundle e é legível por qualquer
@@ -87,7 +91,7 @@ cd web
 npm ci
 VITE_SUPABASE_URL=https://zcvnfxelcgcydopcdayc.supabase.co \
 VITE_SUPABASE_ANON_KEY=<anon> \
-VITE_API_URL=https://sera-api.onrender.com \
+VITE_API_URL=https://sera-api-8n2k.onrender.com \
   npm run build
 npx wrangler pages deploy dist --project-name sera
 ```

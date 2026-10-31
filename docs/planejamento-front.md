@@ -194,7 +194,7 @@ parser e o contrato isolados da UI.
 ```bash
 VITE_SUPABASE_URL=https://zcvnfxelcgcydopcdayc.supabase.co
 VITE_SUPABASE_ANON_KEY=<publishable/anon key>
-VITE_API_URL=https://sera-api.onrender.com
+VITE_API_URL=https://sera-api-8n2k.onrender.com
 ```
 
 `env.ts` valida presença e formato (URL https, sem barra final) e derruba o
