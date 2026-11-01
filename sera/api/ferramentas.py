@@ -40,6 +40,19 @@ _VALORES_KNOB = {
     "toque_yandere": ("desligado", "leve", "medio"),
 }
 
+# Campos aceitos por cada ferramenta JW (esquema achatado).
+_ARGUMENTOS_JW = {
+    "search_bible_books": ("query",),
+    "get_bible_verse": ("book", "chapter", "verse"),
+    "get_verse_with_study": ("book", "chapter", "verse", "fields", "limit"),
+    "get_bible_verse_url": ("book", "chapter", "verse"),
+    "getWorkbookLinks": ("pub", "langwritten", "issue", "fileformat"),
+    "getWorkbookContent": ("url",),
+    "getWatchtowerLinks": ("pub", "langwritten", "issue", "fileformat"),
+    "getWatchtowerContent": ("url",),
+    "get_jw_captions": ("video_id",),
+}
+
 ESQUEMA_PESQUISAR_WEB = {
     "type": "function",
     "function": {
@@ -161,17 +174,57 @@ ESQUEMA_JW = {
                         "get_jw_captions",
                     ],
                 },
-                "argumentos": {
-                    "type": "object",
+                "query": {
+                    "type": "string",
                     "description": (
-                        "Parâmetros da ferramenta escolhida. Ex.: "
-                        '{"book":43,"chapter":3,"verse":16} ou '
-                        '{"langwritten":"T"}.'
+                        "Nome do livro para search_bible_books. Ex.: "
+                        '"matthew", "psalms", "joão".'
                     ),
-                    "additionalProperties": True,
                 },
+                "book": {
+                    "type": "integer",
+                    "description": (
+                        "Número do livro de 1 a 66. Use search_bible_books "
+                        "antes se não souber. Ex.: Salmos=19, Mateus=40."
+                    ),
+                },
+                "chapter": {"type": "integer"},
+                "verse": {
+                    "type": "string",
+                    "description": "'16', '3-5' ou '1,3,5'.",
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Campos de get_verse_with_study. Ex.: "
+                        '["verses","study_notes","study_articles"].'
+                    ),
+                },
+                "limit": {"type": "integer"},
+                "url": {
+                    "type": "string",
+                    "description": (
+                        "URL retornada por getWorkbookLinks ou "
+                        "getWatchtowerLinks."
+                    ),
+                },
+                "video_id": {"type": "string"},
+                "pub": {
+                    "type": "string",
+                    "description": "'mwb' para apostila, 'w' para Sentinela.",
+                },
+                "langwritten": {
+                    "type": "string",
+                    "description": "'T' para português, 'E' para inglês.",
+                },
+                "issue": {
+                    "type": "string",
+                    "description": "Opcional, formato YYYYMM00.",
+                },
+                "fileformat": {"type": "string"},
             },
-            "required": ["ferramenta", "argumentos"],
+            "required": ["ferramenta"],
         },
     },
 }
@@ -248,20 +301,25 @@ Você pode consultar a Bíblia e publicações com a ferramenta `jw`.
 
 - Use quando a pessoa pedir versículo, estudo bíblico, apostila (CLM),
   A Sentinela, vídeo ou conteúdo das Testemunhas de Jeová.
-- Ferramentas e argumentos:
-  - `search_bible_books`: {"query":"matthew"}; use antes para descobrir o
-    número do livro (1–66).
-  - `get_bible_verse`: {"book":43,"chapter":3,"verse":16}
-  - `get_verse_with_study`: {"book":40,"chapter":5,"verse":"3-5",
-    "fields":["verses","study_notes","study_articles"]}
-  - `get_bible_verse_url`: {"book":19,"chapter":83,"verse":"18"}
-  - `getWorkbookLinks`: {"langwritten":"T"} — primeiro passo da apostila.
-  - `getWorkbookContent`: {"url":"..."} — use uma URL retornada por
-    `getWorkbookLinks`.
-  - `getWatchtowerLinks`: {"langwritten":"T"} — primeiro passo d'A Sentinela.
-  - `getWatchtowerContent`: {"url":"..."} — use uma URL retornada por
-    `getWatchtowerLinks`.
-  - `get_jw_captions`: {"video_id":"..."}
+- Ferramentas e argumentos (todos vão no mesmo objeto, com `ferramenta`):
+  - `search_bible_books`: `ferramenta=search_bible_books`, `query=matthew`;
+    use antes para descobrir o número do livro (1–66).
+  - `get_bible_verse`: `ferramenta=get_bible_verse`, `book=43`,
+    `chapter=3`, `verse=16`.
+  - `get_verse_with_study`: `ferramenta=get_verse_with_study`, `book=40`,
+    `chapter=5`, `verse=3-5`, `fields=[verses, study_notes,
+    study_articles]`.
+  - `get_bible_verse_url`: `ferramenta=get_bible_verse_url`, `book=19`,
+    `chapter=23`, `verse=1`.
+  - `getWorkbookLinks`: `ferramenta=getWorkbookLinks`, `langwritten=T` —
+    primeiro passo da apostila.
+  - `getWorkbookContent`: `ferramenta=getWorkbookContent`, `url=...` — use
+    uma URL retornada por `getWorkbookLinks`.
+  - `getWatchtowerLinks`: `ferramenta=getWatchtowerLinks`, `langwritten=T`
+    — primeiro passo d'A Sentinela.
+  - `getWatchtowerContent`: `ferramenta=getWatchtowerContent`, `url=...` —
+    use uma URL retornada por `getWatchtowerLinks`.
+  - `get_jw_captions`: `ferramenta=get_jw_captions`, `video_id=...`.
 - Não invente texto bíblico nem conteúdo de publicação. Se a ferramenta não
   trouxer, diga que não encontrou.
 - Cite a URL quando o resultado tiver uma.
@@ -285,6 +343,9 @@ ferramenta `jw`.
   claro que é o mais próximo encontrado, não o tema exato.
 - Sempre que citar um versículo, chame também `get_bible_verse_url` para
   obter o link do texto em jw.org.
+- Se o texto vier em inglês (o acervo do serviço é majoritariamente em
+  inglês), traduza a citação para português e diga que foi traduzida,
+  mantendo o link original.
 - Termine sempre com uma seção `## Fontes` com um link Markdown para cada
   página ou arquivo consultado. Repita apenas os links que apareceram nos
   resultados da ferramenta.
@@ -406,14 +467,23 @@ async def _jw(
     ferramenta = str(dados.get("ferramenta") or "").strip()
     if not ferramenta:
         raise FerramentaInvalida("informe qual ferramenta JW usar")
+    if ferramenta not in _ARGUMENTOS_JW:
+        raise FerramentaInvalida(f"ferramenta JW desconhecida: {ferramenta}")
 
-    argumentos = dados.get("argumentos")
-    if argumentos is None:
-        argumentos = {}
-    if not isinstance(argumentos, Mapping):
+    aninhados = dados.get("argumentos")
+    if isinstance(aninhados, Mapping):
+        # Compatibilidade com o formato antigo {"argumentos": {...}}.
+        argumentos = dict(aninhados)
+    elif aninhados is not None:
         raise FerramentaInvalida(
             "os argumentos da ferramenta JW precisam ser um objeto"
         )
+    else:
+        argumentos = {
+            campo: dados[campo]
+            for campo in _ARGUMENTOS_JW[ferramenta]
+            if dados.get(campo) is not None
+        }
 
     resposta = await contexto.jw.executar(ferramenta, argumentos)
     return {

@@ -230,3 +230,27 @@ async def test_modo_jw_sem_servico_responde_503(cliente):
         json={"pessoa_id": "maria", "mensagem": "oi", "fonte": "jw"},
     )
     assert resposta.status_code == 503
+
+
+async def test_ferramenta_jw_aceita_argumentos_achatados():
+    jw = FakeJW("Salmo 23")
+    contexto = ContextoFerramentas(jw=jw)
+
+    resultado = await executar_ferramenta(
+        "jw",
+        '{"ferramenta": "get_verse_with_study", "book": 19, '
+        '"chapter": 23, "verse": "1-3"}',
+        contexto,
+    )
+
+    assert resultado["texto"] == "Salmo 23"
+    assert jw.chamadas == [
+        ("get_verse_with_study", {"book": 19, "chapter": 23, "verse": "1-3"})
+    ]
+
+
+async def test_ferramenta_jw_recusa_nome_desconhecido():
+    with pytest.raises(Exception, match="desconhecida"):
+        await executar_ferramenta(
+            "jw", '{"ferramenta": "inventada"}', ContextoFerramentas(jw=FakeJW())
+        )
