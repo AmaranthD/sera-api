@@ -38,6 +38,55 @@ export interface UsoLLM {
   total_tokens: number | null
 }
 
+export type CategoriaMemoria =
+  'familia' | 'trabalho' | 'gostos' | 'rotina' | 'saude' | 'outro'
+
+export interface Memoria {
+  id: string
+  pessoa_id: string
+  texto: string
+  categoria: CategoriaMemoria
+  criada_em: string
+}
+
+export type TipoAjuste =
+  | 'apelido'
+  | 'piada_interna'
+  | 'formato'
+  | 'assunto'
+  | 'nivel_sarcasmo'
+  | 'formalidade'
+  | 'nivel_tecnico'
+  | 'toque_yandere'
+
+export interface Ajuste {
+  id: string
+  pessoa_id: string
+  tipo: TipoAjuste
+  texto: string | null
+  valor: string | null
+  origem: 'conversa' | 'manual'
+  criada_em: string
+}
+
+export interface AtualizacaoMemoria {
+  texto?: string
+  categoria?: CategoriaMemoria
+}
+
+export interface AtualizacaoAjuste {
+  texto?: string | null
+  valor?: string | null
+}
+
+export interface DadosExportados {
+  gerado_em: string
+  pessoa: Pessoa
+  memorias: Memoria[]
+  ajustes: Ajuste[]
+  conversas: Array<Conversa & { mensagens: Mensagem[] }>
+}
+
 export interface EntradaPessoa {
   nome: string
   faixa_etaria: FaixaEtaria

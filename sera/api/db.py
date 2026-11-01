@@ -235,6 +235,21 @@ class Banco:
             self._apagar_memoria, pessoa_id, memoria_id
         )
 
+    async def atualizar_memoria(
+        self,
+        pessoa_id: str,
+        memoria_id: str,
+        texto: str,
+        categoria: str,
+    ) -> dict | None:
+        return await to_thread.run_sync(
+            self._atualizar_memoria,
+            pessoa_id,
+            memoria_id,
+            texto,
+            categoria,
+        )
+
     async def adicionar_tema(self, pessoa_id: str, tema: str) -> bool:
         return await to_thread.run_sync(
             self._adicionar_tema, pessoa_id, tema
@@ -264,6 +279,17 @@ class Banco:
     async def apagar_ajuste(self, pessoa_id: str, ajuste_id: str) -> bool:
         return await to_thread.run_sync(
             self._apagar_ajuste, pessoa_id, ajuste_id
+        )
+
+    async def atualizar_ajuste(
+        self,
+        pessoa_id: str,
+        ajuste_id: str,
+        texto: str | None,
+        valor: str | None,
+    ) -> dict | None:
+        return await to_thread.run_sync(
+            self._atualizar_ajuste, pessoa_id, ajuste_id, texto, valor
         )
 
     def _criar_pessoa(
@@ -437,6 +463,26 @@ class Banco:
             )
             return cursor.rowcount > 0
 
+    def _atualizar_memoria(
+        self,
+        pessoa_id: str,
+        memoria_id: str,
+        texto: str,
+        categoria: str,
+    ) -> dict | None:
+        with self._conexao() as conn:
+            cursor = conn.execute(
+                "UPDATE memorias SET texto = ?, categoria = ? "
+                "WHERE id = ? AND pessoa_id = ?",
+                (texto, categoria, memoria_id, pessoa_id),
+            )
+            if cursor.rowcount == 0:
+                return None
+            linha = conn.execute(
+                "SELECT * FROM memorias WHERE id = ?", (memoria_id,)
+            ).fetchone()
+            return dict(linha) if linha is not None else None
+
     def _adicionar_tema(self, pessoa_id: str, tema: str) -> bool:
         with self._conexao() as conn:
             cursor = conn.execute(
@@ -505,6 +551,26 @@ class Banco:
                 (ajuste_id, pessoa_id),
             )
             return cursor.rowcount > 0
+
+    def _atualizar_ajuste(
+        self,
+        pessoa_id: str,
+        ajuste_id: str,
+        texto: str | None,
+        valor: str | None,
+    ) -> dict | None:
+        with self._conexao() as conn:
+            cursor = conn.execute(
+                "UPDATE ajustes SET texto = ?, valor = ? "
+                "WHERE id = ? AND pessoa_id = ?",
+                (texto, valor, ajuste_id, pessoa_id),
+            )
+            if cursor.rowcount == 0:
+                return None
+            linha = conn.execute(
+                "SELECT * FROM ajustes WHERE id = ?", (ajuste_id,)
+            ).fetchone()
+            return dict(linha) if linha is not None else None
 
 
     def _indexar_notas(self, notas: Sequence[Nota]) -> dict:

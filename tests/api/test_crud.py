@@ -64,6 +64,46 @@ async def test_crud_de_memoria(cliente):
     assert denovo.status_code == 404
 
 
+async def test_atualizar_memoria(cliente):
+    await criar_pessoa(cliente)
+    criada = await cliente.post(
+        "/pessoas/maria/memorias",
+        json={"texto": "tem um gato chamado Tobias", "categoria": "familia"},
+    )
+    memoria_id = criada.json()["id"]
+
+    atualizada = await cliente.patch(
+        f"/pessoas/maria/memorias/{memoria_id}",
+        json={"texto": "tem um gato chamado Tom", "categoria": "gostos"},
+    )
+    assert atualizada.status_code == 200
+    assert atualizada.json()["texto"] == "tem um gato chamado Tom"
+    assert atualizada.json()["categoria"] == "gostos"
+
+    parcial = await cliente.patch(
+        f"/pessoas/maria/memorias/{memoria_id}",
+        json={"texto": "tem um gato chamado Tomás"},
+    )
+    assert parcial.status_code == 200
+    assert parcial.json()["categoria"] == "gostos"
+
+    vazia = await cliente.patch(
+        f"/pessoas/maria/memorias/{memoria_id}", json={}
+    )
+    assert vazia.status_code == 422
+
+    segredo = await cliente.patch(
+        f"/pessoas/maria/memorias/{memoria_id}",
+        json={"texto": "a senha é 1234"},
+    )
+    assert segredo.status_code == 422
+
+    inexistente = await cliente.patch(
+        "/pessoas/maria/memorias/nao-existe", json={"texto": "x y z"}
+    )
+    assert inexistente.status_code == 404
+
+
 async def test_memoria_com_segredo_e_recusada(cliente):
     await criar_pessoa(cliente)
     resposta = await cliente.post(
@@ -123,6 +163,77 @@ async def test_crud_de_ajuste(cliente):
     apagado = await cliente.delete(f"/pessoas/maria/ajustes/{ajuste_id}")
     assert apagado.status_code == 204
     assert (await cliente.get("/pessoas/maria/ajustes")).json() == []
+
+
+async def test_atualizar_ajuste(cliente):
+    await criar_pessoa(cliente)
+    criado = await cliente.post(
+        "/pessoas/maria/ajustes",
+        json={"tipo": "apelido", "texto": "chama ela de Mãe Sera"},
+    )
+    ajuste_id = criado.json()["id"]
+
+    atualizado = await cliente.patch(
+        f"/pessoas/maria/ajustes/{ajuste_id}",
+        json={"texto": "chama ela de Sera"},
+    )
+    assert atualizado.status_code == 200
+    assert atualizado.json()["texto"] == "chama ela de Sera"
+
+    nivel = await cliente.post(
+        "/pessoas/maria/ajustes",
+        json={"tipo": "nivel_sarcasmo", "valor": "alto"},
+    )
+    nivel_id = nivel.json()["id"]
+    trocado = await cliente.patch(
+        f"/pessoas/maria/ajustes/{nivel_id}", json={"valor": "leve"}
+    )
+    assert trocado.status_code == 200
+    assert trocado.json()["valor"] == "leve"
+
+    invalido = await cliente.patch(
+        f"/pessoas/maria/ajustes/{nivel_id}", json={"valor": "extremo"}
+    )
+    assert invalido.status_code == 422
+
+    vazio = await cliente.patch(
+        f"/pessoas/maria/ajustes/{nivel_id}", json={}
+    )
+    assert vazio.status_code == 422
+
+    inexistente = await cliente.patch(
+        "/pessoas/maria/ajustes/nao-existe", json={"texto": "x"}
+    )
+    assert inexistente.status_code == 404
+
+
+async def test_exportar_dados(cliente):
+    await criar_pessoa(cliente)
+    await cliente.post(
+        "/pessoas/maria/memorias", json={"texto": "gosta de jazz"}
+    )
+    await cliente.post(
+        "/pessoas/maria/ajustes",
+        json={"tipo": "apelido", "texto": "Mãe Sera"},
+    )
+    resposta = await cliente.post(
+        "/chat", json={"pessoa_id": "maria", "mensagem": "oi"}
+    )
+    assert any(nome == "done" for nome, _ in eventos(resposta.text))
+
+    exportado = await cliente.get("/pessoas/maria/dados")
+    assert exportado.status_code == 200
+    assert "attachment" in exportado.headers["content-disposition"]
+
+    corpo = exportado.json()
+    assert corpo["pessoa"]["nome"] == "Maria"
+    assert [m["texto"] for m in corpo["memorias"]] == ["gosta de jazz"]
+    assert corpo["ajustes"][0]["tipo"] == "apelido"
+    assert len(corpo["conversas"]) == 1
+    assert len(corpo["conversas"][0]["mensagens"]) == 2
+    assert corpo["gerado_em"]
+
+    assert (await cliente.get("/pessoas/ninguem/dados")).status_code == 404
 
 
 async def test_apagar_pessoa_apaga_tudo(app, cliente):

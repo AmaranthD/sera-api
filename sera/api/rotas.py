@@ -5,12 +5,12 @@ import json
 import logging
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 
 import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..prompt import (
     AjusteAprendido,
@@ -38,12 +38,14 @@ from .ferramentas import (
     INSTRUCAO_BUSCA,
     INSTRUCAO_MEMORIA,
     NOME_AJUSTAR,
+    NOME_ESQUECER,
     NOME_LEMBRAR,
     NOME_PESQUISA,
     ContextoFerramentas,
     FerramentaDesconhecida,
     FerramentaInvalida,
     bloco_resultados,
+    consulta_esquecimento,
     consulta_explicita,
     esquemas,
     executar_ferramenta,
@@ -60,8 +62,10 @@ from .llm import (
 from .relogio import agora as agora_do_fuso
 from .relogio import bloco_agora, normalizar_consulta
 from .schemas import (
+    AjusteAtualizacao,
     AjusteEntrada,
     ChatEntrada,
+    MemoriaAtualizacao,
     MemoriaEntrada,
     PessoaEntrada,
     TemaEntrada,
@@ -232,6 +236,39 @@ async def apagar_memoria(
     return Response(status_code=204)
 
 
+@router.patch("/pessoas/{pessoa_id}/memorias/{memoria_id}")
+async def atualizar_memoria(
+    pessoa_id: str,
+    memoria_id: str,
+    corpo: MemoriaAtualizacao,
+    banco: DependenciaBanco,
+    usuario: DependenciaUsuario,
+):
+    pessoa_id = _pessoa_do_usuario(usuario, pessoa_id)
+    await _exigir_pessoa(banco, pessoa_id)
+    if corpo.texto is None and corpo.categoria is None:
+        raise HTTPException(status_code=422, detail="nada para atualizar")
+
+    memorias = await banco.listar_memorias(pessoa_id)
+    atual = next((item for item in memorias if item["id"] == memoria_id), None)
+    if atual is None:
+        raise HTTPException(status_code=404, detail="memória não encontrada")
+
+    texto = (corpo.texto or atual["texto"]).strip()
+    if contem_segredo(texto):
+        raise HTTPException(
+            status_code=422, detail="a memória parece conter dado sensível"
+        )
+    categoria = CategoriaFato(corpo.categoria or atual["categoria"])
+
+    atualizada = await banco.atualizar_memoria(
+        pessoa_id, memoria_id, texto, categoria.value
+    )
+    if atualizada is None:
+        raise HTTPException(status_code=404, detail="memória não encontrada")
+    return atualizada
+
+
 @router.post("/pessoas/{pessoa_id}/nao_mencionar", status_code=201)
 async def adicionar_tema(
     pessoa_id: str,
@@ -330,6 +367,54 @@ async def apagar_ajuste(
     return Response(status_code=204)
 
 
+@router.patch("/pessoas/{pessoa_id}/ajustes/{ajuste_id}")
+async def atualizar_ajuste(
+    pessoa_id: str,
+    ajuste_id: str,
+    corpo: AjusteAtualizacao,
+    banco: DependenciaBanco,
+    usuario: DependenciaUsuario,
+):
+    pessoa_id = _pessoa_do_usuario(usuario, pessoa_id)
+    await _exigir_pessoa(banco, pessoa_id)
+    if corpo.texto is None and corpo.valor is None:
+        raise HTTPException(status_code=422, detail="nada para atualizar")
+
+    ajustes = await banco.listar_ajustes(pessoa_id)
+    atual = next((item for item in ajustes if item["id"] == ajuste_id), None)
+    if atual is None:
+        raise HTTPException(status_code=404, detail="ajuste não encontrado")
+
+    try:
+        validado = validar_ajustes(
+            [
+                AjusteAprendido(
+                    tipo=TipoAjuste(atual["tipo"]),
+                    texto=(
+                        corpo.texto
+                        if corpo.texto is not None
+                        else atual.get("texto")
+                    ),
+                    valor=(
+                        corpo.valor
+                        if corpo.valor is not None
+                        else atual.get("valor")
+                    ),
+                    origem=OrigemAjuste(atual["origem"]),
+                )
+            ]
+        )[0]
+    except AjusteInvalido as erro:
+        raise HTTPException(status_code=422, detail=erro.mensagem) from erro
+
+    atualizado = await banco.atualizar_ajuste(
+        pessoa_id, ajuste_id, validado.texto, validado.valor
+    )
+    if atualizado is None:
+        raise HTTPException(status_code=404, detail="ajuste não encontrado")
+    return atualizado
+
+
 @router.get("/pessoas/{pessoa_id}/conversas")
 async def listar_conversas(
     pessoa_id: str,
@@ -339,6 +424,37 @@ async def listar_conversas(
     pessoa_id = _pessoa_do_usuario(usuario, pessoa_id)
     await _exigir_pessoa(banco, pessoa_id)
     return await banco.listar_conversas(pessoa_id)
+
+
+@router.get("/pessoas/{pessoa_id}/dados")
+async def exportar_dados(
+    pessoa_id: str,
+    banco: DependenciaBanco,
+    usuario: DependenciaUsuario,
+):
+    """Exporta tudo o que a Sera sabe sobre a pessoa (LGPD)."""
+    pessoa_id = _pessoa_do_usuario(usuario, pessoa_id)
+    pessoa = await banco.obter_pessoa(pessoa_id)
+    if pessoa is None:
+        raise HTTPException(status_code=404, detail="pessoa não encontrada")
+
+    conversas = await banco.listar_conversas(pessoa_id)
+    for conversa in conversas:
+        conversa["mensagens"] = await banco.listar_mensagens(conversa["id"])
+
+    dados = {
+        "gerado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "pessoa": pessoa,
+        "memorias": await banco.listar_memorias(pessoa_id),
+        "ajustes": await banco.listar_ajustes(pessoa_id),
+        "conversas": conversas,
+    }
+    return JSONResponse(
+        content=dados,
+        headers={
+            "Content-Disposition": 'attachment; filename="sera-dados.json"'
+        },
+    )
 
 
 @router.get("/conversas/{conversa_id}/mensagens")
@@ -389,8 +505,20 @@ async def chat(
         request, config, corpo.mensagem, system, momento
     )
     contexto = ContextoFerramentas(
-        busca=busca, banco=banco, pessoa_id=pessoa_id
+        busca=busca,
+        banco=banco,
+        pessoa_id=pessoa_id,
+        mensagem_usuario=corpo.mensagem,
     )
+    system, esqueceu = await _aplicar_esquecimento(
+        config, corpo.mensagem, system, contexto
+    )
+    if esqueceu and ferramentas:
+        ferramentas = [
+            ferramenta
+            for ferramenta in ferramentas
+            if ferramenta["function"]["name"] != NOME_ESQUECER
+        ] or None
     mensagens = [{"role": "system", "content": system}]
     mensagens.extend(
         {"role": linha["papel"], "content": linha["conteudo"]} for linha in historico
@@ -480,6 +608,37 @@ async def _preparar_ferramentas(
         system = f"{system}\n\n{INSTRUCAO_MEMORIA}"
 
     return busca, ferramentas or None, fontes, system
+
+
+async def _aplicar_esquecimento(
+    config: Config,
+    mensagem: str,
+    system: str,
+    contexto: ContextoFerramentas,
+) -> tuple[str, bool]:
+    """Executa "esqueça X" sem depender de o modelo chamar a ferramenta.
+
+    Devolve o system atualizado e se a memória foi realmente apagada (para
+    retirar a ferramenta `esquecer` daquela resposta).
+    """
+    if not config.aprendizado_habilitado:
+        return system, False
+
+    alvo = consulta_esquecimento(mensagem)
+    if alvo is None:
+        return system, False
+
+    try:
+        resultado = await executar_ferramenta(
+            NOME_ESQUECER, {"texto": alvo, "confirmado": True}, contexto
+        )
+    except (FerramentaDesconhecida, FerramentaInvalida):
+        return system, False
+
+    nota = _nota_de_ferramenta(NOME_ESQUECER, resultado)
+    if not nota:
+        return system, False
+    return f"{system}\n\n## Memória\n{nota}", bool(resultado.get("ok"))
 
 
 async def _montar_system(
@@ -724,6 +883,12 @@ async def _executar_chamadas(
 
 def _nota_de_ferramenta(nome: str, resultado: dict) -> str:
     if nome == NOME_LEMBRAR:
+        if resultado.get("precisa_confirmar"):
+            return (
+                "Antes de guardar, confirme com a pessoa: "
+                f'"{resultado.get("texto")}". Só chame de novo com '
+                "confirmado=true depois do sim."
+            )
         if resultado.get("duplicada"):
             return "Essa memória já existia; nada novo foi salvo."
         memoria = resultado.get("memoria") or {}
@@ -734,6 +899,29 @@ def _nota_de_ferramenta(nome: str, resultado: dict) -> str:
         ajuste = resultado.get("ajuste") or {}
         alvo = ajuste.get("texto") or ajuste.get("valor") or ""
         return f"Preferência atualizada: {ajuste.get('tipo')} = {alvo}."
+    if nome == NOME_ESQUECER:
+        if resultado.get("precisa_confirmar"):
+            memoria = resultado.get("memoria") or {}
+            return (
+                "Antes de apagar, confirme com a pessoa: "
+                f'"{memoria.get("texto")}". Só chame de novo com '
+                "confirmado=true depois do sim."
+            )
+        if resultado.get("ambigua"):
+            textos = "; ".join(
+                f'"{item.get("texto")}"'
+                for item in resultado.get("candidatas") or []
+            )
+            return (
+                "Há mais de uma memória parecida: "
+                f"{textos}. Pergunte qual delas apagar."
+            )
+        if resultado.get("encontrada") is False:
+            return "Não encontrei nenhuma memória com esse teor."
+        esquecida = resultado.get("esquecida") or {}
+        if resultado.get("ok"):
+            return f"Esqueci: {esquecida.get('texto')}."
+        return "Não consegui apagar essa memória."
     return ""
 
 

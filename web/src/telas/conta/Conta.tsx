@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
+import { ehSessaoExpirada, mensagemDoErro } from '../../api/erros'
 import { useSessao } from '../../auth/contexto'
 import { usePessoa } from '../../pessoa/contexto'
 import {
@@ -8,11 +9,20 @@ import {
   ROTULO_PERFIL,
   iniciais,
 } from '../../dominios/texto'
+import type {
+  Ajuste,
+  AtualizacaoAjuste,
+  AtualizacaoMemoria,
+  Memoria,
+} from '../../dominios/tipos'
+import { Banner } from '../../componentes/Banner'
 import { Botao } from '../../componentes/Botao'
 import { BotaoInstalar } from '../../componentes/BotaoInstalar'
 import { Icone } from '../../componentes/Icone'
 import { Marca } from '../../componentes/Marca'
 import { useInstalacao } from '../../pwa/usePwa'
+import { SecaoAjustes } from './Ajustes'
+import { SecaoMemorias } from './Memorias'
 import estilos from './Conta.module.css'
 
 type Saude = 'verificando' | 'ok' | 'falha'
@@ -23,6 +33,12 @@ export function Conta() {
   const { podeInstalar, instalado, ehIOS } = useInstalacao()
   const [saude, setSaude] = useState<Saude>('verificando')
   const [saindo, setSaindo] = useState(false)
+  const [memorias, setMemorias] = useState<Memoria[]>([])
+  const [ajustes, setAjustes] = useState<Ajuste[]>([])
+  const [carregandoDados, setCarregandoDados] = useState(true)
+  const [erroDados, setErroDados] = useState<string | null>(null)
+  const [baixando, setBaixando] = useState(false)
+  const [erroExportacao, setErroExportacao] = useState<string | null>(null)
 
   useEffect(() => {
     let ativo = true
@@ -38,6 +54,100 @@ export function Conta() {
       ativo = false
     }
   }, [api])
+
+  const carregarDados = useCallback(async () => {
+    if (!pessoa) return
+    setCarregandoDados(true)
+    setErroDados(null)
+    try {
+      const [listaMemorias, listaAjustes] = await Promise.all([
+        api.listarMemorias(pessoa.id),
+        api.listarAjustes(pessoa.id),
+      ])
+      setMemorias(listaMemorias)
+      setAjustes(listaAjustes)
+    } catch (falha) {
+      if (ehSessaoExpirada(falha)) {
+        await sair()
+        return
+      }
+      setErroDados(mensagemDoErro(falha))
+    } finally {
+      setCarregandoDados(false)
+    }
+  }, [api, pessoa, sair])
+
+  useEffect(() => {
+    void carregarDados()
+  }, [carregarDados])
+
+  const atualizarMemoria = useCallback(
+    async (id: string, dados: AtualizacaoMemoria) => {
+      if (!pessoa) return
+      const atualizada = await api.atualizarMemoria(pessoa.id, id, dados)
+      setMemorias((atuais) =>
+        atuais.map((memoria) => (memoria.id === id ? atualizada : memoria)),
+      )
+    },
+    [api, pessoa],
+  )
+
+  const apagarMemoria = useCallback(
+    async (id: string) => {
+      if (!pessoa) return
+      await api.apagarMemoria(pessoa.id, id)
+      setMemorias((atuais) => atuais.filter((memoria) => memoria.id !== id))
+    },
+    [api, pessoa],
+  )
+
+  const atualizarAjuste = useCallback(
+    async (id: string, dados: AtualizacaoAjuste) => {
+      if (!pessoa) return
+      const atualizado = await api.atualizarAjuste(pessoa.id, id, dados)
+      setAjustes((atuais) =>
+        atuais.map((ajuste) => (ajuste.id === id ? atualizado : ajuste)),
+      )
+    },
+    [api, pessoa],
+  )
+
+  const apagarAjuste = useCallback(
+    async (id: string) => {
+      if (!pessoa) return
+      await api.apagarAjuste(pessoa.id, id)
+      setAjustes((atuais) => atuais.filter((ajuste) => ajuste.id !== id))
+    },
+    [api, pessoa],
+  )
+
+  async function baixarDados() {
+    if (!pessoa) return
+    setBaixando(true)
+    setErroExportacao(null)
+    try {
+      const dados = await api.exportarDados(pessoa.id)
+      const blob = new Blob([JSON.stringify(dados, null, 2)], {
+        type: 'application/json',
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'sera-dados.json'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (falha) {
+      if (ehSessaoExpirada(falha)) {
+        await sair()
+        return
+      }
+      setErroExportacao(mensagemDoErro(falha))
+    } finally {
+      setBaixando(false)
+    }
+  }
 
   if (carregando) return null
   if (!pessoa) return <Navigate to="/onboarding" replace />
@@ -87,6 +197,43 @@ export function Conta() {
           <p className={`${estilos.secaoTexto} ${estilos.secaoTextoFinal}`}>
             {DESCRICAO_PERFIL[pessoa.perfil]}
           </p>
+        </section>
+
+        <SecaoMemorias
+          memorias={memorias}
+          carregando={carregandoDados}
+          erro={erroDados}
+          aoAtualizar={atualizarMemoria}
+          aoApagar={apagarMemoria}
+          aoTentarDeNovo={() => void carregarDados()}
+        />
+
+        <SecaoAjustes
+          ajustes={ajustes}
+          carregando={carregandoDados}
+          erro={erroDados}
+          aoAtualizar={atualizarAjuste}
+          aoApagar={apagarAjuste}
+          aoTentarDeNovo={() => void carregarDados()}
+        />
+
+        <section className={estilos.secao} aria-labelledby="dados-titulo">
+          <h2 className={estilos.secaoTitulo} id="dados-titulo">
+            Seus dados
+          </h2>
+          <p className={estilos.secaoTexto}>
+            Baixe uma cópia do seu perfil, do que a Sera aprendeu e das suas conversas
+            em um arquivo JSON.
+          </p>
+          {erroExportacao ? <Banner tipo="erro">{erroExportacao}</Banner> : null}
+          <Botao
+            variante="secundario"
+            carregando={baixando}
+            icone={<Icone nome="instalar" tamanho={17} />}
+            onClick={() => void baixarDados()}
+          >
+            Baixar meus dados (JSON)
+          </Botao>
         </section>
 
         {!instalado && (podeInstalar || ehIOS) ? (

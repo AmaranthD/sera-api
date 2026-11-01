@@ -276,6 +276,25 @@ class BancoSupabase:
         )
         return bool(dados)
 
+    async def atualizar_memoria(
+        self,
+        pessoa_id: str,
+        memoria_id: str,
+        texto: str,
+        categoria: str,
+    ) -> dict | None:
+        dados = await self._req(
+            "PATCH",
+            "memorias",
+            params={
+                "id": f"eq.{memoria_id}",
+                "pessoa_id": f"eq.{pessoa_id}",
+            },
+            corpo={"texto": texto, "categoria": categoria},
+            prefer="return=representation",
+        )
+        return _primeiro(dados)
+
     async def adicionar_tema(self, pessoa_id: str, tema: str) -> bool:
         try:
             await self._req(
@@ -356,6 +375,25 @@ class BancoSupabase:
             prefer="return=representation",
         )
         return bool(dados)
+
+    async def atualizar_ajuste(
+        self,
+        pessoa_id: str,
+        ajuste_id: str,
+        texto: str | None,
+        valor: str | None,
+    ) -> dict | None:
+        dados = await self._req(
+            "PATCH",
+            "ajustes",
+            params={
+                "id": f"eq.{ajuste_id}",
+                "pessoa_id": f"eq.{pessoa_id}",
+            },
+            corpo={"texto": texto, "valor": valor},
+            prefer="return=representation",
+        )
+        return _primeiro(dados)
 
     async def buscar_trechos(self, consulta: str, limite: int) -> list[dict]:
         if limite <= 0:

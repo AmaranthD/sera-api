@@ -99,3 +99,8 @@ export function erroDeRede(erro: unknown): ErroApi {
 export function ehSessaoExpirada(erro: unknown): boolean {
   return erro instanceof ErroApi && erro.status === 401
 }
+
+export function mensagemDoErro(erro: unknown): string {
+  if (erro instanceof Error && erro.message) return erro.message
+  return 'Não foi possível completar o pedido.'
+}

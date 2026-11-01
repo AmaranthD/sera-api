@@ -60,6 +60,16 @@ test('o botão de conta mostra o perfil', async ({ page }) => {
   await expect(page.getByText('Funcionando')).toBeVisible()
 })
 
+test('a conta mostra o que a Sera aprendeu', async ({ page }) => {
+  await page.goto('/conta')
+
+  await expect(page.getByText('Gosta de jazz')).toBeVisible()
+  await expect(page.getByText('Mãe Sera')).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Baixar meus dados (JSON)' }),
+  ).toBeVisible()
+})
+
 test('respeita o tema escuro do sistema', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/')

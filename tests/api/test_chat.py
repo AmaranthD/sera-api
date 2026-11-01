@@ -464,4 +464,70 @@ async def test_modelo_pode_lembrar_no_chat(cliente, fake):
     assert [item["texto"] for item in memorias.json()] == ["Gosta de jazz"]
 
 
+async def test_pedido_explicito_de_esquecer_apaga_antes_do_modelo(cliente, fake):
+    await criar_pessoa(cliente)
+    await cliente.post(
+        "/pessoas/maria/memorias",
+        json={"texto": "Gosta de jazz", "categoria": "gostos"},
+    )
+    fake.chunks = ["Esqueci."]
+
+    resposta = await cliente.post(
+        "/chat",
+        json={"pessoa_id": "maria", "mensagem": "esqueça que eu gosto de jazz"},
+    )
+
+    assert tokens(eventos(resposta.text)) == ["Esqueci."]
+    assert "Esqueci: Gosta de jazz." in system_prompt(fake)
+    assert (await cliente.get("/pessoas/maria/memorias")).json() == []
+    nomes = {item["function"]["name"] for item in (fake.ferramentas or [])}
+    assert "esquecer" not in nomes
+
+
+async def test_nao_esqueca_nao_apaga_memoria(cliente, fake):
+    await criar_pessoa(cliente)
+    await cliente.post(
+        "/pessoas/maria/memorias",
+        json={"texto": "Gosta de jazz", "categoria": "gostos"},
+    )
+
+    await cliente.post(
+        "/chat",
+        json={
+            "pessoa_id": "maria",
+            "mensagem": "não esqueça de comprar leite",
+        },
+    )
+
+    memorias = await cliente.get("/pessoas/maria/memorias")
+    assert [item["texto"] for item in memorias.json()] == ["Gosta de jazz"]
+
+
+async def test_saude_so_grava_com_sim_explicito(cliente, fake):
+    await criar_pessoa(cliente)
+    chamada = ChamadaFerramenta(
+        id="call_1",
+        nome="lembrar",
+        argumentos=(
+            '{"texto": "Tem diabetes", "categoria": "saude", '
+            '"confirmado": true}'
+        ),
+    )
+
+    fake.chamadas = [chamada]
+    await cliente.post(
+        "/chat",
+        json={"pessoa_id": "maria", "mensagem": "tenho diabetes"},
+    )
+    assert (await cliente.get("/pessoas/maria/memorias")).json() == []
+
+    fake.chamadas = [chamada]
+    await cliente.post(
+        "/chat",
+        json={"pessoa_id": "maria", "mensagem": "sim, pode guardar"},
+    )
+    memorias = await cliente.get("/pessoas/maria/memorias")
+    assert [item["texto"] for item in memorias.json()] == ["Tem diabetes"]
+
+
 

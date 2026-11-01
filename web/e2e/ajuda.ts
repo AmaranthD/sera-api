@@ -19,6 +19,24 @@ export const CONVERSA = {
   atualizada_em: '2026-01-02T10:05:00.000Z',
 }
 
+export const MEMORIA = {
+  id: 'mem-1',
+  pessoa_id: 'p1',
+  texto: 'Gosta de jazz',
+  categoria: 'gostos',
+  criada_em: '2026-01-03T10:00:00.000Z',
+}
+
+export const AJUSTE = {
+  id: 'aj-1',
+  pessoa_id: 'p1',
+  tipo: 'apelido',
+  texto: 'Mãe Sera',
+  valor: null,
+  origem: 'conversa',
+  criada_em: '2026-01-04T10:00:00.000Z',
+}
+
 export const SESSAO = {
   access_token: 'token-de-teste',
   refresh_token: 'refresh-de-teste',
@@ -114,6 +132,36 @@ export async function rotearApi(page: Page) {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify([CONVERSA]),
+      })
+      return
+    }
+    if (url.pathname === '/pessoas/p1/memorias') {
+      await rota.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([MEMORIA]),
+      })
+      return
+    }
+    if (url.pathname === '/pessoas/p1/ajustes') {
+      await rota.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([AJUSTE]),
+      })
+      return
+    }
+    if (url.pathname === '/pessoas/p1/dados') {
+      await rota.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          gerado_em: '2026-01-05T10:00:00.000Z',
+          pessoa: PESSOA,
+          memorias: [MEMORIA],
+          ajustes: [AJUSTE],
+          conversas: [{ ...CONVERSA, mensagens: [] }],
+        }),
       })
       return
     }

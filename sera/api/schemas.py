@@ -37,6 +37,11 @@ class MemoriaEntrada(BaseModel):
     categoria: CategoriaFato = CategoriaFato.OUTRO
 
 
+class MemoriaAtualizacao(BaseModel):
+    texto: FatoTexto | None = None
+    categoria: CategoriaFato | None = None
+
+
 class TemaEntrada(BaseModel):
     tema: Tema
 
@@ -46,6 +51,11 @@ class AjusteEntrada(BaseModel):
     texto: str | None = None
     valor: str | None = None
     origem: OrigemAjuste = OrigemAjuste.MANUAL
+
+
+class AjusteAtualizacao(BaseModel):
+    texto: str | None = None
+    valor: str | None = None
 
 
 class ChatEntrada(BaseModel):

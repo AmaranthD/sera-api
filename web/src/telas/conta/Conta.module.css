@@ -182,6 +182,153 @@
   color: var(--tinta-fraca);
 }
 
+.secaoTopo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vazio {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--tinta-fraca);
+}
+
+.lista {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.item {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--linha);
+  border-radius: 16px;
+  background: var(--superficie);
+}
+
+.itemConteudo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.itemTexto {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.itemAcoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--tinta-fraca);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.botaoPequeno {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.formulario {
+  display: grid;
+  gap: 8px;
+}
+
+.campoRotulo {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--tinta-fraca);
+}
+
+.textarea,
+.select,
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--linha-forte);
+  border-radius: 12px;
+  background: var(--superficie);
+  color: var(--tinta);
+  font: inherit;
+  font-size: 14.5px;
+}
+
+.textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+
+.textarea:focus,
+.select:focus,
+.input:focus {
+  outline: 2px solid var(--indigo);
+  outline-offset: 1px;
+}
+
+.acoesInline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.confirmacao {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--perigo-borda);
+  border-radius: 12px;
+  background: var(--perigo-claro);
+}
+
+.confirmacaoTexto {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--tinta);
+}
+
+.ajusteTexto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ajusteRotulo {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-fraca);
+}
+
 @keyframes pulsar {
   50% {
     opacity: 0.35;

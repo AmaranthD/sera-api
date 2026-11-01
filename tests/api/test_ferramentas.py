@@ -5,6 +5,7 @@ from sera.api.ferramentas import (
     ContextoFerramentas,
     FerramentaInvalida,
     bloco_resultados,
+    consulta_esquecimento,
     consulta_explicita,
     executar_ferramenta,
 )
@@ -82,3 +83,20 @@ def test_bloco_resultados_delimita_conteudo_nao_confiavel():
     assert "https://exemplo.com/tempo" in bloco
     assert "<<<INÍCIO DOS RESULTADOS" in bloco
     assert "<<<FIM DOS RESULTADOS>>>" in bloco
+
+
+@pytest.mark.parametrize(
+    ("mensagem", "esperado"),
+    [
+        ("esqueça que eu gosto de jazz", "gosto de jazz"),
+        ("esquece a memória sobre jazz", "jazz"),
+        ("não lembre mais de jazz", "jazz"),
+        ("esqueça o fato de que eu gosto de jazz", "gosto de jazz"),
+        ("não esqueça de comprar leite", None),
+        ("esqueça isso", None),
+        ("Oi, tudo bem?", None),
+        ("", None),
+    ],
+)
+def test_consulta_esquecimento(mensagem, esperado):
+    assert consulta_esquecimento(mensagem) == esperado

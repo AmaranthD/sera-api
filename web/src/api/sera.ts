@@ -1,8 +1,13 @@
 import type {
+  Ajuste,
+  AtualizacaoAjuste,
+  AtualizacaoMemoria,
   Conversa,
+  DadosExportados,
   EntradaChat,
   EntradaPessoa,
   EventoChat,
+  Memoria,
   Mensagem,
   Pessoa,
 } from '../dominios/tipos'
@@ -43,6 +48,58 @@ export class ApiSera {
   listarConversas(pessoaId: string): Promise<Conversa[]> {
     return this.http.json<Conversa[]>(
       `/pessoas/${encodeURIComponent(pessoaId)}/conversas`,
+    )
+  }
+
+  listarMemorias(pessoaId: string): Promise<Memoria[]> {
+    return this.http.json<Memoria[]>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/memorias`,
+    )
+  }
+
+  atualizarMemoria(
+    pessoaId: string,
+    memoriaId: string,
+    dados: AtualizacaoMemoria,
+  ): Promise<Memoria> {
+    return this.http.json<Memoria>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/memorias/${encodeURIComponent(memoriaId)}`,
+      { metodo: 'PATCH', corpo: dados },
+    )
+  }
+
+  apagarMemoria(pessoaId: string, memoriaId: string): Promise<null> {
+    return this.http.json<null>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/memorias/${encodeURIComponent(memoriaId)}`,
+      { metodo: 'DELETE' },
+    )
+  }
+
+  listarAjustes(pessoaId: string): Promise<Ajuste[]> {
+    return this.http.json<Ajuste[]>(`/pessoas/${encodeURIComponent(pessoaId)}/ajustes`)
+  }
+
+  atualizarAjuste(
+    pessoaId: string,
+    ajusteId: string,
+    dados: AtualizacaoAjuste,
+  ): Promise<Ajuste> {
+    return this.http.json<Ajuste>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/ajustes/${encodeURIComponent(ajusteId)}`,
+      { metodo: 'PATCH', corpo: dados },
+    )
+  }
+
+  apagarAjuste(pessoaId: string, ajusteId: string): Promise<null> {
+    return this.http.json<null>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/ajustes/${encodeURIComponent(ajusteId)}`,
+      { metodo: 'DELETE' },
+    )
+  }
+
+  exportarDados(pessoaId: string): Promise<DadosExportados> {
+    return this.http.json<DadosExportados>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/dados`,
     )
   }
 

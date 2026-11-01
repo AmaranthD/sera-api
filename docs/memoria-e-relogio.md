@@ -1,8 +1,17 @@
 # Relógio e memória da Sera
 
-> **Status em 2026-11-01:** relógio e ferramentas de memória/preferências
-> implementados. Falta a tela para a pessoa ver, editar e apagar o que foi
-> guardado (fase 3).
+> **Status em 2026-11-01:** relógio, memória/preferências e a tela de
+> gerenciamento em `/conta` implementados. A Sera também consegue esquecer
+> algo a pedido, com confirmação.
+
+## 0. Visão geral
+
+| Peça | Onde fica |
+|---|---|
+| Relógio e datas relativas | `sera/api/relogio.py` |
+| Ferramentas de memória | `sera/api/ferramentas.py` |
+| Rotas de CRUD e exportação | `sera/api/rotas.py` |
+| Tela de gerenciamento | `web/src/telas/conta/` |
 
 ## 1. Relógio interno
 
@@ -47,6 +56,7 @@ provedor aceita tool calling (`LLM_PROVIDER=openai`):
 |---|---|---|
 | `lembrar(texto, categoria)` | guarda um fato durável | tabela `memorias` |
 | `ajustar_preferencia(tipo, texto/valor)` | muda apelido, formato, assunto ou níveis | tabela `ajustes` |
+| `esquecer(texto, confirmado)` | apaga uma memória, com confirmação | tabela `memorias` |
 
 As duas já existiam no banco, no prompt (`# SOBRE A PESSOA` e
 `# AJUSTES APRENDIDOS`) e na API. O que faltava era o modelo conseguir
@@ -67,11 +77,42 @@ escrever.
 
 - `contem_segredo` recusa CPF, cartão, senha, token e afins.
 - Memórias duplicadas não são gravadas de novo.
-- Assunto sensível deve ser confirmado antes de guardar (regra do prompt).
+- Memórias de `saude` só são gravadas com `confirmado=true` **e** um pedido
+  explícito ("lembre que...", "anota isso") ou um sim claro na mensagem
+  atual da pessoa. O modelo não consegue autorizar sozinho.
+- `esquecer` também é em dois passos: primeiro devolve o que encontrou,
+  depois apaga com `confirmado=true`. Se houver mais de uma memória
+  parecida, devolve as candidatas em vez de apagar.
+- Limite de 100 memórias e 20 ajustes por pessoa. As mais novas têm
+  prioridade no prompt quando o orçamento aperta.
 - O prompt proíbe prometer lembretes futuros: a Sera não tem agenda nem
   notificações.
 - Cada pessoa só enxerga a própria memória (RLS no Supabase; `pessoa_id` no
   SQLite).
+
+## 3. Tela em `/conta`
+
+A tela de conta ganhou três blocos:
+
+- **O que a Sera sabe sobre você:** lista as memórias com categoria, edição
+  no lugar e exclusão com confirmação.
+- **Ajustes aprendidos:** lista apelido, formato, assunto e níveis; edição
+  por texto ou select, exclusão com confirmação.
+- **Seus dados:** botão “Baixar meus dados (JSON)” com perfil, memórias,
+  ajustes, conversas e mensagens.
+
+As rotas usadas:
+
+| Método | Rota |
+|---|---|
+| `PATCH` | `/pessoas/{id}/memorias/{memoria_id}` |
+| `DELETE` | `/pessoas/{id}/memorias/{memoria_id}` |
+| `PATCH` | `/pessoas/{id}/ajustes/{ajuste_id}` |
+| `DELETE` | `/pessoas/{id}/ajustes/{ajuste_id}` |
+| `GET` | `/pessoas/{id}/dados` (JSON com `Content-Disposition`) |
+
+O download é montado no navegador a partir do JSON; nenhum dado passa por
+outro serviço.
 
 ### Por que não extrair memória automaticamente
 
@@ -80,7 +121,7 @@ O modelo só grava quando percebe um fato durável ou um pedido explícito.
 Se um dia houver resumo automático, o lugar certo é um job noturno, não o
 caminho do chat.
 
-## 3. SQLite ou Supabase
+## 4. SQLite ou Supabase
 
 O projeto já abstrai os dois backends:
 
@@ -91,10 +132,11 @@ Memória e ajustes usam as mesmas tabelas nos dois. Não criar um SQLite
 separado para o aprendizado: o disco do Render free é efêmero e não
 sincroniza entre dispositivos.
 
-## Pendente (fase 3)
+## Pendente (próximas fases)
 
-- Tela para listar, editar e apagar memórias e ajustes.
-- Ferramenta `esquecer` ou equivalente para "não lembre mais disso".
-- Política de confirmação mais explícita para saúde/finanças.
-- Exportar tudo o que a Sera sabe sobre a pessoa (LGPD).
-- Limite/expiração de memórias antigas.
+- Confirmação em dois passos também para finanças (hoje o código cobre
+  `saude`; finanças ficam na regra do prompt).
+- Expiração ou arquivamento de memórias antigas.
+- Notificações/agenda, se um dia a Sera for lembrar de datas sozinha.
+- Criptografia em repouso extra para memórias sensíveis, se o produto
+  exigir.
