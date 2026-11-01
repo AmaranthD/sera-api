@@ -80,6 +80,17 @@
   background: var(--perigo-claro);
 }
 
+.claro {
+  border-color: var(--chat-linha-forte);
+  background: var(--chat-superficie);
+  color: var(--chat-texto);
+}
+
+.claro:hover:not(:disabled) {
+  border-color: var(--chat-ouro);
+  color: var(--chat-ouro);
+}
+
 .larguraTotal {
   width: 100%;
 }

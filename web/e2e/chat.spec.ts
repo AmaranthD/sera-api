@@ -70,6 +70,16 @@ test('a conta mostra o que a Sera aprendeu', async ({ page }) => {
   ).toBeVisible()
 })
 
+test('página de instalação é compartilhável', async ({ page }) => {
+  await page.goto('/instalar')
+
+  await expect(
+    page.getByRole('heading', { name: /Um atalho no celular/ }),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Copiar link' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Enviar no WhatsApp' })).toBeVisible()
+})
+
 test('respeita o tema escuro do sistema', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/')

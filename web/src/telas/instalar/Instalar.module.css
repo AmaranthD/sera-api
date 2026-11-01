@@ -1,0 +1,151 @@
+.pagina {
+  position: relative;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: clamp(16px, 4vw, 48px);
+  background: var(--chat-fundo);
+}
+
+.fundo {
+  position: absolute;
+  inset: 0;
+  background: url('/paladina.webp') center 18% / cover no-repeat;
+  opacity: 0.22;
+  filter: saturate(0.7) contrast(1.05);
+}
+
+.veu {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse at 50% 30%,
+      rgba(8, 12, 24, 0.18) 0,
+      rgba(8, 12, 24, 0.9) 72%
+    ),
+    linear-gradient(180deg, rgba(8, 12, 24, 0.78), rgba(6, 9, 18, 0.95));
+}
+
+.cartao {
+  position: relative;
+  z-index: 1;
+  width: min(600px, 100%);
+  padding: clamp(22px, 4vw, 38px);
+  border: 2px solid var(--chat-ouro);
+  border-radius: var(--raio);
+  background: rgba(8, 12, 24, 0.94);
+  color: var(--chat-texto);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.45);
+}
+
+.topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.selo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--chat-linha-forte);
+  border-radius: 2px;
+  color: var(--chat-texto-fraco);
+  font-family: var(--fonte-pixel);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.olho {
+  margin: 0 0 10px;
+  color: var(--chat-ouro);
+  font-family: var(--fonte-pixel);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+}
+
+.titulo {
+  margin: 0 0 12px;
+  color: var(--chat-texto);
+  font-family: var(--fonte-titulo);
+  font-size: clamp(30px, 5vw, 42px);
+  font-weight: 400;
+  line-height: 1.12;
+}
+
+.texto {
+  margin: 0 0 22px;
+  color: var(--chat-texto-suave);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.aviso {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--chat-ouro);
+  border-radius: var(--raio-pequeno);
+  color: var(--chat-ouro);
+  font-size: 13.5px;
+}
+
+.acoes {
+  margin: 0 0 14px;
+}
+
+.passos {
+  padding: 12px 14px;
+  border: 1px solid var(--chat-linha-forte);
+  border-radius: var(--raio-pequeno);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--chat-texto-suave);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.passos strong {
+  color: var(--chat-texto);
+}
+
+.acoesSecundarias {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.nota {
+  margin: 0 0 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--chat-linha);
+  color: var(--chat-texto-fraco);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.voltar {
+  color: var(--chat-texto-suave);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 520px) {
+  .pagina {
+    padding: 14px;
+  }
+
+  .cartao {
+    padding: 20px 18px;
+  }
+
+  .acoesSecundarias > * {
+    flex: 1;
+  }
+}

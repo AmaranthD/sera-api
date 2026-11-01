@@ -321,6 +321,15 @@
   color: var(--tinta);
 }
 
+.linkInstalar {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--indigo-escuro);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .ajusteTexto {
   display: flex;
   flex-direction: column;

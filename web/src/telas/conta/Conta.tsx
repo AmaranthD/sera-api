@@ -20,7 +20,6 @@ import { Botao } from '../../componentes/Botao'
 import { BotaoInstalar } from '../../componentes/BotaoInstalar'
 import { Icone } from '../../componentes/Icone'
 import { Marca } from '../../componentes/Marca'
-import { useInstalacao } from '../../pwa/usePwa'
 import { SecaoAjustes } from './Ajustes'
 import { SecaoMemorias } from './Memorias'
 import estilos from './Conta.module.css'
@@ -30,7 +29,6 @@ type Saude = 'verificando' | 'ok' | 'falha'
 export function Conta() {
   const { sessao, api, sair } = useSessao()
   const { pessoa, carregando } = usePessoa()
-  const { podeInstalar, instalado, ehIOS } = useInstalacao()
   const [saude, setSaude] = useState<Saude>('verificando')
   const [saindo, setSaindo] = useState(false)
   const [memorias, setMemorias] = useState<Memoria[]>([])
@@ -236,16 +234,19 @@ export function Conta() {
           </Botao>
         </section>
 
-        {!instalado && (podeInstalar || ehIOS) ? (
-          <section className={estilos.secao}>
-            <h2 className={estilos.secaoTitulo}>Aplicativo</h2>
-            <p className={estilos.secaoTexto}>
-              Instale a Sera na tela inicial para abrir como um app, sem passar pelo
-              navegador.
-            </p>
-            <BotaoInstalar larguraTotal />
-          </section>
-        ) : null}
+        <section className={estilos.secao} aria-labelledby="app-titulo">
+          <h2 className={estilos.secaoTitulo} id="app-titulo">
+            Aplicativo
+          </h2>
+          <p className={estilos.secaoTexto}>
+            Instale na tela inicial para abrir como um app ou envie o link de instalação
+            para alguém.
+          </p>
+          <BotaoInstalar larguraTotal />
+          <Link to="/instalar" className={estilos.linkInstalar}>
+            Abrir página de instalação e compartilhamento
+          </Link>
+        </section>
 
         <section className={estilos.secao}>
           <h2 className={estilos.secaoTitulo}>Sessão</h2>

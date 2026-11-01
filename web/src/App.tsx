@@ -12,6 +12,7 @@ import { PessoaProvider } from './pessoa/PessoaProvider'
 import { usePessoa } from './pessoa/contexto'
 import { ChatTela } from './telas/chat/ChatTela'
 import { Conta } from './telas/conta/Conta'
+import { Instalar } from './telas/instalar/Instalar'
 import { Login } from './telas/login/Login'
 import { Onboarding } from './telas/onboarding/Onboarding'
 import estilos from './App.module.css'
@@ -53,6 +54,7 @@ export function App({ ambiente }: { ambiente: Ambiente }) {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/instalar" element={<Instalar />} />
             <Route element={<Protegido />}>
               <Route path="/conta" element={<Conta />} />
               <Route

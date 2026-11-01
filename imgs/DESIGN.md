@@ -212,7 +212,33 @@ ffmpeg -ss 0 -i imgs/bg/gemini_generated_video_d1128780.mp4 -frames:v 1 \
 | `web/public/fundo/*` | vídeo e poster |
 | `web/scripts/gerar-assets-design.mjs` | gera logo, ícones e ilustração |
 
-## 12. Próximos passos (v2)
+## 13. Instalação e link compartilhável
+
+- Link público: **`https://sera-chat.pages.dev/instalar`**
+- A página não exige login e serve para mandar para alguém. Ela mostra:
+  - botão nativo de instalar quando o navegador dispara
+    `beforeinstallprompt`;
+  - instruções para iPhone (Safari → Compartilhar → Adicionar à Tela de
+    Início) e Android (Chrome → menu → Instalar app);
+  - “Copiar link” e “Enviar no WhatsApp”;
+  - aviso de cache de ícone/barra do sistema.
+- O evento de instalação fica em um store global (`usePwa.ts`) para não se
+  perder quando a pessoa navega até `/instalar`.
+- PWA:
+  - `theme_color` e `background_color`: `#080c18`;
+  - um único `<meta name="theme-color" content="#080c18">`, para a barra do
+    navegador/app não puxar o pergaminho;
+  - ícones versionados (`icon-*-v2.png`) para forçar a troca do ícone antigo
+    na tela inicial;
+  - se o ícone continuar antigo, remover o atalho, limpar os dados do site e
+    instalar de novo.
+- **Barra do sistema:** a barra com voltar/menu do Android é controlada pelo
+  tema/Material You do aparelho, não pelo site. O app controla a cor da
+  barra do navegador/PWA; se ela estiver verde, o ajuste é no tema do
+  celular (ou trocar o accent do sistema).
+
+
+## 14. Próximos passos (v2)
 
 - Logo com transparência real (hoje o recorte é JPEG com fundo azul).
 - Ornamentos de canto/dither nos painéis, com moderação.

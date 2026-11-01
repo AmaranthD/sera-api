@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import estilos from './Botao.module.css'
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variante?: 'primario' | 'secundario' | 'fantasma' | 'perigo'
+  variante?: 'primario' | 'secundario' | 'fantasma' | 'perigo' | 'claro'
   carregando?: boolean
   icone?: ReactNode
   larguraTotal?: boolean

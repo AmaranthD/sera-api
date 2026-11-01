@@ -41,9 +41,9 @@ await sharp(OP)
 
 // Ícones do PWA: quadrado do elmo com moldura dourada.
 for (const [nome, tamanho] of [
-  ['icon-192.png', 192],
-  ['icon-512.png', 512],
-  ['apple-touch-icon.png', 180],
+  ['icon-192-v2.png', 192],
+  ['icon-512-v2.png', 512],
+  ['apple-touch-icon-v2.png', 180],
 ]) {
   const base = await sharp(LOGO)
     .resize(tamanho, tamanho, { fit: 'cover' })
@@ -76,6 +76,6 @@ await sharp({
     { input: anel, left: 0, top: 0 },
   ])
   .png({ compressionLevel: 9, palette: true })
-  .toFile(path.join(publico, 'icons', 'icon-maskable-512.png'))
+  .toFile(path.join(publico, 'icons', 'icon-maskable-512-v2.png'))
 
 console.log('assets de design gerados em web/public')
