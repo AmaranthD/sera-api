@@ -24,6 +24,7 @@ pytestmark = pytest.mark.anyio
         ("Oi, tudo bem?", None),
         ("Vou pesquisar depois", None),
         ("pesquise nas minhas notas", None),
+        ("não pesquise isso agora", None),
         ("me ajuda com minhas anotações", None),
         ("pesquise", None),
         ("", None),

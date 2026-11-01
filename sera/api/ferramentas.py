@@ -131,6 +131,11 @@ _SEM_BUSCA = re.compile(
     r"\b(minhas? notas?|meu vault|na minha mem[óo]ria|nas minhas anota[çc][õo]es)\b",
     re.IGNORECASE,
 )
+_NEGACAO = re.compile(
+    r"\b(n[ãa]o|nem)\s+(pesquise|busque|procure|consulte|pesquisar|"
+    r"buscar|procurar|consultar)\b",
+    re.IGNORECASE,
+)
 
 
 def consulta_explicita(mensagem: str) -> str | None:
@@ -141,7 +146,7 @@ def consulta_explicita(mensagem: str) -> str | None:
     Conversa comum e pedidos sobre as notas da pessoa não disparam.
     """
     texto = " ".join(str(mensagem).split())
-    if not texto or _SEM_BUSCA.search(texto):
+    if not texto or _SEM_BUSCA.search(texto) or _NEGACAO.search(texto):
         return None
 
     alvo = _VERBO_EXPLICITO.search(texto)
