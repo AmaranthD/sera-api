@@ -82,6 +82,22 @@ describe('ClienteHttp', () => {
     ).rejects.toMatchObject({ status: 401, codigo: 'sessao_expirada' })
   })
 
+  it('usa o detail da API em 403', async () => {
+    servidor.use(
+      mswHttp.get('https://api.test/pessoas', () =>
+        HttpResponse.json(
+          { detail: 'este e-mail ainda não está liberado para usar a Sera' },
+          { status: 403 },
+        ),
+      ),
+    )
+
+    await expect(cliente().json('/pessoas')).rejects.toMatchObject({
+      status: 403,
+      message: 'este e-mail ainda não está liberado para usar a Sera',
+    })
+  })
+
   it('usa o detail da API em 422', async () => {
     servidor.use(
       mswHttp.post('https://api.test/pessoas', () =>

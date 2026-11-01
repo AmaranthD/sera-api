@@ -169,6 +169,7 @@ async def usuario_atual(request: Request) -> Usuario | None:
         email = (usuario.email or "").lower()
         if email not in config.emails_permitidos:
             raise HTTPException(
-                status_code=403, detail="e-mail não autorizado"
+                status_code=403,
+                detail="este e-mail ainda não está liberado para usar a Sera",
             )
     return usuario

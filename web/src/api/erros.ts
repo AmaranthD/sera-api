@@ -16,7 +16,7 @@ const MENSAGENS: Record<number, { codigo: string; mensagem: string }> = {
   },
   403: {
     codigo: 'sem_acesso',
-    mensagem: 'Sua conta não tem acesso a esta conversa.',
+    mensagem: 'Sua conta ainda não tem acesso à Sera. Peça para liberar seu e-mail.',
   },
   404: {
     codigo: 'nao_encontrado',
@@ -67,7 +67,8 @@ export function erroDaResposta(status: number, corpo: unknown): ErroApi {
   const padrao = MENSAGENS[status]
   const detalhe = detalheDoCorpo(corpo)
   if (padrao) {
-    const mensagem = status === 422 && detalhe ? detalhe : padrao.mensagem
+    const mensagem =
+      (status === 422 || status === 403) && detalhe ? detalhe : padrao.mensagem
     return new ErroApi(status, padrao.codigo, mensagem)
   }
   if (status >= 500) {

@@ -172,3 +172,6 @@ async def test_allowlist_de_email(config):
             "/pessoas", headers=_autorizacao("token-maria")
         )
         assert resposta.status_code == 403
+        assert resposta.json()["detail"] == (
+            "este e-mail ainda não está liberado para usar a Sera"
+        )
