@@ -52,9 +52,10 @@ from .ferramentas import (
     consulta_explicita,
     esquemas,
     executar_ferramenta,
-    extrair_urls_jw,
     ferramentas_jw_para,
-    titulo_fonte_jw,
+    fontes_jw,
+    formatar_resultado_jw,
+    referencia_biblica,
 )
 from .jw import JWIndisponivel
 from .llm import (
@@ -575,6 +576,7 @@ async def chat(
             contexto=contexto,
             ferramentas=ferramentas,
             momento=momento,
+            uma_fonte=modo_jw,
         )
 
     return await _resposta_stream(
@@ -589,6 +591,7 @@ async def chat(
         ferramentas=ferramentas,
         fontes=fontes,
         momento=momento,
+        uma_fonte=modo_jw,
     )
 
 
@@ -623,12 +626,67 @@ async def _preparar_ferramentas(
     )
     if jw:
         system = f"{system}\n\n{INSTRUCAO_JW}"
+    fontes: list[dict] = []
     if modo_jw:
         system = f"{system}\n\n{INSTRUCAO_JW_MODO}"
-    if not ferramentas and busca is None:
-        return None, None, [], system
+        referencia = referencia_biblica(mensagem)
+        cliente_jw = getattr(request.app.state, "jw", None)
+        if referencia is not None and jw and cliente_jw is not None:
+            livro, capitulo, inicio, fim = referencia
+            verso = f"{inicio}-{fim}" if fim is not None else str(inicio)
+            argumentos: dict = {
+                "book": livro,
+                "chapter": capitulo,
+                "verse": verso,
+                "fields": ["verses", "study_notes"],
+            }
+            try:
+                resposta = await cliente_jw.executar(
+                    "get_verse_with_study", argumentos
+                )
+            except JWIndisponivel as erro:
+                logger.warning(
+                    "consulta JW da referência falhou: %s", erro.detalhe
+                )
+                system = (
+                    f"{system}\n\n## Conteúdo JW\n"
+                    "A consulta do versículo falhou agora. Avise que não "
+                    "conseguiu acessar o conteúdo JW e não invente o texto."
+                )
+            else:
+                formatado = formatar_resultado_jw(
+                    resposta.ferramenta, resposta.texto
+                )
+                limite = getattr(cliente_jw, "max_chars", None)
+                if (
+                    isinstance(limite, int)
+                    and limite > 0
+                    and len(formatado) > limite
+                ):
+                    formatado = f"{formatado[:limite].rstrip()}…"
 
-    fontes: list[dict] = []
+                fontes = fontes_jw(
+                    "get_verse_with_study", argumentos, resposta.texto
+                )
+                link = fontes[0]["url"] if fontes else ""
+                system = (
+                    f"{system}\n\n## Conteúdo JW (já consultado)\n"
+                    f"{formatado}\n\n"
+                    "Responda usando apenas este conteúdo. Não chame a "
+                    "ferramenta de novo para este versículo. Termine com uma "
+                    "seção `## Fontes` com este único link em Markdown: "
+                    f"[Bíblia (jw.org)]({link})"
+                )
+                # Já temos o texto: tirar a ferramenta evita chamada
+                # duplicada e o vazamento de marcação do modelo.
+                ferramentas = [
+                    item
+                    for item in ferramentas
+                    if item["function"]["name"] != NOME_JW
+                ]
+    if not ferramentas and busca is None:
+        return None, None, fontes, system
+
     consulta = consulta_explicita(mensagem) if busca is not None else None
 
     if consulta is not None:
@@ -759,13 +817,20 @@ async def _resposta_unica(
     contexto: ContextoFerramentas | None = None,
     ferramentas: list[dict] | None = None,
     momento: datetime | None = None,
+    uma_fonte: bool = False,
 ) -> dict:
     contexto = contexto or ContextoFerramentas()
     partes: list[str] = []
     uso: Uso | None = None
     try:
         async for evento in _fluxo_com_ferramentas(
-            llm, mensagens, config, contexto, ferramentas, momento
+            llm,
+            mensagens,
+            config,
+            contexto,
+            ferramentas,
+            momento,
+            uma_fonte=uma_fonte,
         ):
             if isinstance(evento, Delta):
                 partes.append(evento.texto)
@@ -795,6 +860,8 @@ async def _fluxo_com_ferramentas(
     contexto: ContextoFerramentas,
     ferramentas: list[dict] | None,
     momento: datetime | None = None,
+    *,
+    uma_fonte: bool = False,
 ):
     """Executa o loop de tool calling e emite Delta/Fim e eventos de busca.
 
@@ -808,6 +875,7 @@ async def _fluxo_com_ferramentas(
     if contexto.jw is not None and ferramentas:
         rodadas = max(rodadas, config.jw_max_rodadas)
     chamadas: list[ChamadaFerramenta] = []
+    fonte_principal: dict | None = None
 
     if rodadas == 0:
         async for evento in llm.stream(
@@ -843,7 +911,12 @@ async def _fluxo_com_ferramentas(
             chamadas, contexto, momento
         )
         if fontes:
-            yield Fontes(tuple(fontes))
+            if uma_fonte:
+                if fonte_principal is None:
+                    fonte_principal = fontes[0]
+                    yield Fontes((fonte_principal,))
+            else:
+                yield Fontes(tuple(fontes))
         extras = blocos + notas
         if extras:
             conversa[0]["content"] = (
@@ -946,17 +1019,18 @@ async def _executar_chamadas(
             else:
                 blocos.append(
                     "## Conteúdo JW\n"
-                    f"{texto}\n\n"
+                    f"{formatar_resultado_jw(ferramenta_jw, texto)}\n\n"
                     "Use apenas este conteúdo para responder e cite a URL "
                     "quando houver."
                 )
-                for url in extrair_urls_jw(texto):
-                    if url in vistos:
+                for item in resultado.get("fontes") or []:
+                    url = str(item.get("url") or "")
+                    if not url or url in vistos:
                         continue
                     vistos.add(url)
                     fontes.append(
                         {
-                            "titulo": titulo_fonte_jw(ferramenta_jw),
+                            "titulo": item.get("titulo") or "JW",
                             "url": url,
                         }
                     )
@@ -1038,10 +1112,17 @@ async def _resposta_stream(
     ferramentas: list[dict] | None = None,
     fontes: list[dict] | None = None,
     momento: datetime | None = None,
+    uma_fonte: bool = False,
 ) -> StreamingResponse:
     contexto = contexto or ContextoFerramentas()
     fluxo = _fluxo_com_ferramentas(
-        llm, mensagens, config, contexto, ferramentas, momento
+        llm,
+        mensagens,
+        config,
+        contexto,
+        ferramentas,
+        momento,
+        uma_fonte=uma_fonte,
     )
     try:
         primeiro = await anext(fluxo)
@@ -1054,6 +1135,8 @@ async def _resposta_stream(
         ) from erro
 
     fontes_iniciais = list(fontes or [])
+    if uma_fonte:
+        fontes_iniciais = fontes_iniciais[:1]
 
     async def gerar():
         partes: list[str] = []

@@ -151,3 +151,29 @@ describe('MensagemItem com fontes', () => {
     expect(screen.queryByRole('heading', { name: 'Fontes' })).not.toBeInTheDocument()
   })
 })
+
+describe('MensagemItem sem duplicar fontes', () => {
+  it('não repete a lista quando o texto já traz a seção Fontes', () => {
+    render(
+      <MensagemItem
+        mensagem={mensagem({
+          conteudo:
+            'O texto.\n\n## Fontes\n- [Bíblia (jw.org)](https://www.jw.org/finder?bible=1)',
+          fontes: [
+            {
+              titulo: 'Bíblia (jw.org)',
+              url: 'https://www.jw.org/finder?bible=1',
+            },
+          ],
+        })}
+        transcrevendo={false}
+      />,
+    )
+
+    expect(screen.queryByRole('region', { name: 'Fontes' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Bíblia (jw.org)' })).toHaveAttribute(
+      'href',
+      'https://www.jw.org/finder?bible=1',
+    )
+  })
+})

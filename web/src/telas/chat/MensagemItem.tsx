@@ -38,6 +38,9 @@ export function MensagemItem({ mensagem, transcrevendo }: Props) {
   }
 
   const vazia = mensagem.conteudo.length === 0
+  const fontesNoTexto =
+    /(^|\n)\s*#{1,6}\s*fontes\b/i.test(mensagem.conteudo) &&
+    /https?:\/\//i.test(mensagem.conteudo)
   return (
     <article className={estilos.assistente} aria-label="Resposta da Sera">
       <span className={estilos.avatarSera} aria-hidden="true">
@@ -57,7 +60,9 @@ export function MensagemItem({ mensagem, transcrevendo }: Props) {
               {transcrevendo && !vazia ? (
                 <span className={estilos.cursor} aria-hidden="true" />
               ) : null}
-              {!transcrevendo ? <ListaFontes fontes={mensagem.fontes} /> : null}
+              {!transcrevendo && !fontesNoTexto ? (
+                <ListaFontes fontes={mensagem.fontes} />
+              ) : null}
             </>
           )}
         </div>

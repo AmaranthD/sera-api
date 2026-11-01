@@ -77,7 +77,7 @@ async def test_cliente_jw_timeout_vira_indisponivel():
         await cliente.executar("search_bible_books", {"query": "matthew"})
 
 
-async def test_cliente_jw_limita_tamanho():
+async def test_cliente_jw_devolve_texto_completo():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=_resposta("abcdefghij"))
 
@@ -86,7 +86,8 @@ async def test_cliente_jw_limita_tamanho():
     )
     resposta = await cliente.executar("search_bible_books", {"query": "matthew"})
 
-    assert resposta.texto == "abcde…"
+    # O corte é aplicado depois de formatar o JSON, em _jw.
+    assert resposta.texto == "abcdefghij"
 
 
 async def test_ferramenta_jw_delega_ao_cliente():
@@ -213,7 +214,7 @@ async def test_modo_jw_desliga_busca_e_emite_fontes(config):
     fontes = [dados for nome, dados in ev if nome == "sources"]
     assert fontes[0]["fontes"] == [
         {
-            "titulo": "JW · Bíblia",
+            "titulo": "Bíblia (jw.org)",
             "url": "https://www.jw.org/finder?wtlocale=E&bible=19123001&pub=nwtsty",
         }
     ]
@@ -286,7 +287,7 @@ async def test_ultima_rodada_proibe_novas_ferramentas(config):
             "/chat",
             json={
                 "pessoa_id": "maria",
-                "mensagem": "o que diz Mateus 6:34?",
+                "mensagem": "o que a Bíblia diz sobre perdão?",
                 "fonte": "jw",
             },
         )
@@ -371,3 +372,122 @@ async def test_ferramenta_jw_normaliza_tipos_do_scraper():
         ("get_bible_verse", {"book": 60, "chapter": 5, "verse": 7}),
         ("get_verse_with_study", {"book": 40, "chapter": 6, "verse": "1-5"}),
     ]
+
+
+async def test_modo_jw_emite_apenas_uma_fonte(config):
+    fake = FakeLLM(chunks=["Pronto."])
+    jw = FakeJW("https://www.jw.org/finder?bible=19023001")
+    fake.chamadas = [
+        ChamadaFerramenta(
+            id="call_1",
+            nome="jw",
+            argumentos=(
+                '{"ferramenta": "get_bible_verse_url", '
+                '"book": 19, "chapter": 23, "verse": 1}'
+            ),
+        ),
+        ChamadaFerramenta(
+            id="call_2",
+            nome="jw",
+            argumentos=(
+                '{"ferramenta": "get_bible_verse", '
+                '"book": 40, "chapter": 6, "verse": 34}'
+            ),
+        ),
+    ]
+    app = criar_app(
+        replace(config, jw_api_url="https://jw.test/api", jw_api_key="chave"),
+        llm=fake,
+        jw=jw,
+    )
+    transporte = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transporte, base_url="http://test"
+    ) as cliente:
+        await criar_pessoa(cliente)
+        resposta = await cliente.post(
+            "/chat",
+            json={
+                "pessoa_id": "maria",
+                "mensagem": "fale sobre esperança e ansiedade",
+                "fonte": "jw",
+            },
+        )
+
+    ev = eventos(resposta.text)
+    fontes = [dados for nome, dados in ev if nome == "sources"]
+    assert len(fontes) == 1
+    assert len(fontes[0]["fontes"]) == 1
+    assert fontes[0]["fontes"][0]["titulo"] == "Bíblia (jw.org)"
+
+
+async def test_modo_jw_consulta_referencia_antes_do_modelo(config):
+    versiculo = json.dumps(
+        {
+            "reference": "1 Peter 5:7",
+            "verses": [
+                {
+                    "verse_num": 7,
+                    "verse_text": "Lancem sobre ele toda a sua ansiedade.",
+                }
+            ],
+            "study_notes": {"7": "Jeová se importa com você."},
+            "study_articles": [
+                {
+                    "title": "Ansiedade",
+                    "url": "https://wol.jw.org/en/wol/pc/r1/lp-e/1/0",
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+    fake = FakeLLM(chunks=["Pronto."])
+    jw = FakeJW(versiculo)
+    app = criar_app(
+        replace(config, jw_api_url="https://jw.test/api", jw_api_key="chave"),
+        llm=fake,
+        jw=jw,
+    )
+    transporte = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transporte, base_url="http://test"
+    ) as cliente:
+        await criar_pessoa(cliente)
+        resposta = await cliente.post(
+            "/chat",
+            json={
+                "pessoa_id": "maria",
+                "mensagem": "o que diz 1 Pedro 5:7?",
+                "fonte": "jw",
+            },
+        )
+
+    assert resposta.status_code == 200
+    assert jw.chamadas == [
+        (
+            "get_verse_with_study",
+            {
+                "book": 60,
+                "chapter": 5,
+                "verse": "7",
+                "fields": ["verses", "study_notes"],
+            },
+        )
+    ]
+    # O texto já veio pronto: o modelo não precisa chamar ferramenta.
+    assert fake.chamadas_recebidas == 1
+    prompt = system_prompt(fake)
+    assert "Lancem sobre ele toda a sua ansiedade." in prompt
+    assert "Jeová se importa com você." in prompt
+    assert "https://wol.jw.org" not in prompt
+    assert "## Fontes" in prompt
+
+    nomes = {item["function"]["name"] for item in (fake.ferramentas or [])}
+    assert "jw" not in nomes
+
+    fontes = [dados for nome, dados in eventos(resposta.text) if nome == "sources"]
+    assert len(fontes) == 1
+    assert len(fontes[0]["fontes"]) == 1
+    assert fontes[0]["fontes"][0]["url"].endswith(
+        "bible=60005007&pub=nwtsty"
+    )

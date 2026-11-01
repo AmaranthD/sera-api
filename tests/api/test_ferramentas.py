@@ -167,3 +167,77 @@ def test_esquemas_filtra_enum_jw():
     enum = esquema["function"]["parameters"]["properties"]["ferramenta"]["enum"]
     assert "get_bible_verse" in enum
     assert "getWorkbookLinks" not in enum
+
+
+def test_formatar_resultado_jw_vira_texto_limpo():
+    import json
+
+    from sera.api.ferramentas import formatar_resultado_jw
+
+    texto = json.dumps(
+        {
+            "reference": "Matthew 6:34-35",
+            "verses": [
+                {"verse_num": 34, "verse_text": "Nunca fiquem ansiosos."}
+            ],
+            "study_notes": {"34": "Nota sobre o amanhã."},
+            "study_articles": [
+                {
+                    "title": "Como lidar com o estresse",
+                    "url": "https://wol.jw.org/en/wol/pc/r1/lp-e/1/0",
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    saida = formatar_resultado_jw("get_verse_with_study", texto)
+
+    assert "Referência: Matthew 6:34-35" in saida
+    assert "34. Nunca fiquem ansiosos." in saida
+    assert "Nota sobre o amanhã." in saida
+    assert "Como lidar com o estresse" in saida
+    assert "https://wol.jw.org" not in saida
+    assert '"verse_num"' not in saida
+
+
+def test_fontes_jw_usa_uma_fonte_principal():
+    from sera.api.ferramentas import fontes_jw
+
+    assert fontes_jw(
+        "get_verse_with_study",
+        {"book": 40, "chapter": 6, "verse": "34-35"},
+        "{}",
+    ) == [
+        {
+            "titulo": "Bíblia (jw.org)",
+            "url": (
+                "https://www.jw.org/finder?wtlocale=T&prefer=lang"
+                "&bible=40006034-40006035&pub=nwtsty"
+            ),
+        }
+    ]
+    assert fontes_jw("get_bible_verse", {"book": 60, "chapter": 5, "verse": 7}, "{}") == [
+        {
+            "titulo": "Bíblia (jw.org)",
+            "url": (
+                "https://www.jw.org/finder?wtlocale=T&prefer=lang"
+                "&bible=60005007&pub=nwtsty"
+            ),
+        }
+    ]
+    assert fontes_jw("search_bible_books", {"query": "mateus"}, "{}") == []
+    assert fontes_jw("getWorkbookLinks", {}, "{}") == []
+    assert fontes_jw(
+        "getWorkbookContent", {"url": "https://cfp2.jw-cdn.org/a/x.rtf"}, "{}"
+    ) == [{"titulo": "Apostila (CLM)", "url": "https://cfp2.jw-cdn.org/a/x.rtf"}]
+
+
+def test_referencia_biblica():
+    from sera.api.ferramentas import referencia_biblica
+
+    assert referencia_biblica("o que diz 1 Pedro 5:7?") == (60, 5, 7, None)
+    assert referencia_biblica("Salmo 23:1-3") == (19, 23, 1, 3)
+    assert referencia_biblica("leia João 3:16") == (43, 3, 16, None)
+    assert referencia_biblica("Mt 6:34") == (40, 6, 34, None)
+    assert referencia_biblica("não é uma referência") is None

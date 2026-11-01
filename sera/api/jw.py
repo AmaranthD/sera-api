@@ -83,6 +83,10 @@ class ClienteJW:
             await anyio.sleep(min(atraso, restante))
             atraso = min(atraso * 2, 8.0)
 
+    @property
+    def max_chars(self) -> int:
+        return self._config.jw_max_chars
+
     async def executar(
         self,
         ferramenta: str,
@@ -161,9 +165,10 @@ class ClienteJW:
         if not texto:
             texto = "A ferramenta JW não retornou texto."
 
-        limite = self._config.jw_max_chars
-        if len(texto) > limite:
-            texto = f"{texto[:limite].rstrip()}…"
+        # O limite de contexto é aplicado depois de formatar o JSON, em
+        # ferramentas._jw. Aqui só evitamos uma resposta absurda na memória.
+        if len(texto) > 200_000:
+            texto = f"{texto[:200_000].rstrip()}…"
 
         return RespostaJW(
             ferramenta=str(dados.get("ferramenta") or ferramenta),

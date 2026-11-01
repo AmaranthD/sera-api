@@ -354,9 +354,10 @@ ferramenta `jw`.
   mantendo o link original.
 - Escreva a resposta inteira em português; não deixe termos ou frases em
   inglês no meio do texto.
-- Termine sempre com uma seção `## Fontes` com um link Markdown para cada
-  página ou arquivo consultado. Repita apenas os links que apareceram nos
-  resultados da ferramenta.
+- Termine sempre com uma seção `## Fontes` com **um único link em
+  Markdown**: o da página principal consultada (o versículo em jw.org ou a
+  publicação). Não liste artigos de estudo, notas, referências cruzadas nem
+  links internos que apareçam no material.
 """
 
 INSTRUCAO_MEMORIA = """\
@@ -499,10 +500,16 @@ async def _jw(
     argumentos = _normalizar_argumentos_jw(ferramenta, argumentos)
 
     resposta = await contexto.jw.executar(ferramenta, argumentos)
+    texto = formatar_resultado_jw(resposta.ferramenta, resposta.texto)
+    limite = getattr(contexto.jw, "max_chars", None)
+    if isinstance(limite, int) and limite > 0 and len(texto) > limite:
+        texto = f"{texto[:limite].rstrip()}…"
+
     return {
         "ferramenta": resposta.ferramenta,
-        "texto": resposta.texto,
+        "texto": texto,
         "erro": resposta.erro,
+        "fontes": fontes_jw(ferramenta, argumentos, resposta.texto),
     }
 
 
@@ -1066,3 +1073,273 @@ def _normalizar_argumentos_jw(
             if numeros:
                 dados["verse"] = f"{min(numeros)}-{max(numeros)}"
     return dados
+
+
+def _url_biblia(
+    book: Any, chapter: Any, verse: Any = None
+) -> str | None:
+    """Monta o link do texto em jw.org (locale português)."""
+    try:
+        livro = int(book)
+        capitulo = int(chapter)
+    except (TypeError, ValueError):
+        return None
+
+    parametro = f"{livro}{capitulo:03d}"
+    if verse not in (None, ""):
+        texto = str(verse).strip()
+        if "-" in texto:
+            inicio, _, fim = texto.partition("-")
+            try:
+                parametro += (
+                    f"{int(inicio):03d}-{livro}{capitulo:03d}{int(fim):03d}"
+                )
+            except ValueError:
+                return None
+        else:
+            try:
+                parametro += f"{int(texto.split(',')[0]):03d}"
+            except ValueError:
+                return None
+
+    return (
+        "https://www.jw.org/finder?wtlocale=T&prefer=lang"
+        f"&bible={parametro}&pub=nwtsty"
+    )
+
+
+def fontes_jw(
+    ferramenta: str, argumentos: Mapping, texto: str
+) -> list[dict]:
+    """Uma fonte principal por consulta, não todos os links internos."""
+    if ferramenta in (
+        "get_bible_verse",
+        "get_verse_with_study",
+        "get_bible_verse_url",
+    ):
+        if ferramenta == "get_bible_verse_url":
+            urls = extrair_urls_jw(texto)
+            if urls:
+                return [{"titulo": "Bíblia (jw.org)", "url": urls[0]}]
+        url = _url_biblia(
+            argumentos.get("book"),
+            argumentos.get("chapter"),
+            argumentos.get("verse"),
+        )
+        return [{"titulo": "Bíblia (jw.org)", "url": url}] if url else []
+
+    if ferramenta in ("getWorkbookContent", "getWatchtowerContent"):
+        url = str(argumentos.get("url") or "").strip()
+        if not url:
+            return []
+        titulo = (
+            "Apostila (CLM)"
+            if ferramenta == "getWorkbookContent"
+            else "A Sentinela"
+        )
+        return [{"titulo": titulo, "url": url}]
+
+    if ferramenta == "get_jw_captions":
+        urls = extrair_urls_jw(texto)
+        return [{"titulo": "Vídeo (jw.org)", "url": urls[0]}] if urls else []
+
+    # search_bible_books e os *Links são etapas de descoberta, não a fonte.
+    return []
+
+
+def formatar_resultado_jw(ferramenta: str, texto: str) -> str:
+    """Transforma o JSON do jw-mcp em texto legível para o modelo.
+
+    Sem isso o modelo recebe JSON cru, às vezes repete chaves/campos na
+    resposta e cita todos os links internos (artigos de estudo) como fontes.
+    """
+    try:
+        dados = json.loads(texto)
+    except (json.JSONDecodeError, TypeError):
+        return texto
+    if not isinstance(dados, dict):
+        return texto
+
+    linhas: list[str] = []
+
+    if ferramenta == "search_bible_books":
+        for livro in dados.get("books") or []:
+            if isinstance(livro, Mapping):
+                linhas.append(
+                    f"- {livro.get('name')} (livro {livro.get('number')})"
+                )
+    elif ferramenta in (
+        "get_bible_verse",
+        "get_verse_with_study",
+        "get_bible_verse_url",
+    ):
+        referencia = dados.get("reference")
+        if referencia:
+            linhas.append(f"Referência: {referencia}")
+        if dados.get("text"):
+            linhas.append(str(dados["text"]))
+        for verso in dados.get("verses") or []:
+            if isinstance(verso, Mapping):
+                linhas.append(
+                    f"{verso.get('verse_num')}. {verso.get('verse_text')}"
+                )
+        if dados.get("combined_text"):
+            linhas.append(str(dados["combined_text"]))
+
+        notas = dados.get("study_notes")
+        if isinstance(notas, Mapping) and notas:
+            linhas.append("")
+            linhas.append("Notas de estudo:")
+            for verso, nota in notas.items():
+                linhas.append(f"- v. {verso}: {nota}")
+
+        artigos = dados.get("study_articles")
+        if isinstance(artigos, list) and artigos:
+            linhas.append("")
+            linhas.append("Artigos relacionados:")
+            for artigo in artigos:
+                if isinstance(artigo, Mapping) and artigo.get("title"):
+                    linhas.append(f"- {artigo['title']}")
+
+        cruzadas = dados.get("cross_references")
+        if isinstance(cruzadas, list) and cruzadas:
+            linhas.append("")
+            linhas.append("Referências cruzadas: " + "; ".join(
+                str(item) for item in cruzadas
+            ))
+    elif ferramenta in ("getWorkbookLinks", "getWatchtowerLinks"):
+        if dados.get("pubName"):
+            linhas.append(f"Publicação: {dados['pubName']}")
+        if dados.get("formattedDate"):
+            linhas.append(f"Edição: {dados['formattedDate']}")
+        itens = dados.get("weekFiles") or dados.get("articles") or []
+        for item in itens:
+            if isinstance(item, Mapping) and item.get("title"):
+                linhas.append(f"- {item['title']}")
+    elif ferramenta in ("getWorkbookContent", "getWatchtowerContent"):
+        if dados.get("parsedText"):
+            linhas.append(str(dados["parsedText"]))
+    else:
+        return texto
+
+    return "\n".join(linhas) if linhas else texto
+
+
+_LIVROS_BIBLIA = {
+    "genesis": 1,
+    "exodo": 2,
+    "levitico": 3,
+    "numeros": 4,
+    "deuteronomio": 5,
+    "josue": 6,
+    "juizes": 7,
+    "rute": 8,
+    "1 samuel": 9,
+    "1samuel": 9,
+    "2 samuel": 10,
+    "2samuel": 10,
+    "1 reis": 11,
+    "1reis": 11,
+    "2 reis": 12,
+    "2reis": 12,
+    "1 cronicas": 13,
+    "1cronicas": 13,
+    "2 cronicas": 14,
+    "2cronicas": 14,
+    "esdras": 15,
+    "neemias": 16,
+    "ester": 17,
+    "salmo": 19,
+    "salmos": 19,
+    "sl": 19,
+    "proverbios": 20,
+    "eclesiastes": 21,
+    "canticos": 22,
+    "isaias": 23,
+    "jeremias": 24,
+    "lamentacoes": 25,
+    "ezequiel": 26,
+    "daniel": 27,
+    "oseias": 28,
+    "joel": 29,
+    "amos": 30,
+    "obadias": 31,
+    "jonas": 32,
+    "miqueias": 33,
+    "naum": 34,
+    "habacuque": 35,
+    "sofonias": 36,
+    "ageu": 37,
+    "zacarias": 38,
+    "malaquias": 39,
+    "mateus": 40,
+    "mt": 40,
+    "marcos": 41,
+    "mc": 41,
+    "lucas": 42,
+    "lc": 42,
+    "joao": 43,
+    "atos": 44,
+    "at": 44,
+    "romanos": 45,
+    "rom": 45,
+    "1 corintios": 46,
+    "1corintios": 46,
+    "2 corintios": 47,
+    "2corintios": 47,
+    "galatas": 48,
+    "efesios": 49,
+    "filipenses": 50,
+    "colossenses": 51,
+    "1 tessalonicenses": 52,
+    "1tessalonicenses": 52,
+    "2 tessalonicenses": 53,
+    "2tessalonicenses": 53,
+    "1 timoteo": 54,
+    "1timoteo": 54,
+    "2 timoteo": 55,
+    "2timoteo": 55,
+    "tito": 56,
+    "filemom": 57,
+    "hebreus": 58,
+    "tiago": 59,
+    "1 pedro": 60,
+    "1pedro": 60,
+    "2 pedro": 61,
+    "2pedro": 61,
+    "1 joao": 62,
+    "1joao": 62,
+    "2 joao": 63,
+    "2joao": 63,
+    "3 joao": 64,
+    "3joao": 64,
+    "judas": 65,
+    "apocalipse": 66,
+}
+
+_ALIAS_BIBLIA = "|".join(
+    re.escape(alias)
+    for alias in sorted(_LIVROS_BIBLIA, key=len, reverse=True)
+)
+_REFERENCIA_BIBLICA = re.compile(
+    rf"\b({_ALIAS_BIBLIA})\s*(\d{{1,3}})\s*[:.]\s*(\d{{1,3}})"
+    r"(?:\s*[-–]\s*(\d{1,3}))?"
+)
+
+
+def referencia_biblica(
+    mensagem: str,
+) -> tuple[int, int, int, int | None] | None:
+    """Extrai (livro, capítulo, versículo, fim) de "1 Pedro 5:7"."""
+    texto = _normalizar_texto(mensagem)
+    achado = _REFERENCIA_BIBLICA.search(texto)
+    if achado is None:
+        return None
+
+    livro = _LIVROS_BIBLIA[achado.group(1)]
+    capitulo = int(achado.group(2))
+    inicio = int(achado.group(3))
+    fim = int(achado.group(4)) if achado.group(4) else None
+    if fim is not None and fim < inicio:
+        fim = None
+    return livro, capitulo, inicio, fim
