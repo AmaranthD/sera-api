@@ -157,3 +157,83 @@ async def test_criar_mensagem_atualiza_conversa():
     assert [c.method for c in chamadas] == ["POST", "PATCH"]
     assert chamadas[1].url.path == "/rest/v1/conversas"
     assert chamadas[1].url.params["id"] == "eq.c1"
+
+
+async def test_atualizar_memoria_usa_patch_e_escopo_da_pessoa():
+    chamadas: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        chamadas.append(request)
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": "m1",
+                    "pessoa_id": "p1",
+                    "texto": "Gosta de blues",
+                    "categoria": "gostos",
+                }
+            ],
+        )
+
+    banco = _banco(handler)
+    try:
+        atualizada = await banco.atualizar_memoria(
+            "p1", "m1", "Gosta de blues", "gostos"
+        )
+    finally:
+        await banco.fechar()
+
+    assert atualizada is not None
+    assert atualizada["texto"] == "Gosta de blues"
+    requisicao = chamadas[0]
+    assert requisicao.method == "PATCH"
+    assert requisicao.url.path == "/rest/v1/memorias"
+    assert requisicao.url.params["id"] == "eq.m1"
+    assert requisicao.url.params["pessoa_id"] == "eq.p1"
+    assert json.loads(requisicao.content) == {
+        "texto": "Gosta de blues",
+        "categoria": "gostos",
+    }
+
+
+async def test_atualizar_memoria_inexistente_devolve_none():
+    banco = _banco(lambda request: httpx.Response(200, json=[]))
+    try:
+        assert await banco.atualizar_memoria("p1", "m1", "x", "outro") is None
+    finally:
+        await banco.fechar()
+
+
+async def test_atualizar_ajuste_usa_patch():
+    chamadas: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        chamadas.append(request)
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": "a1",
+                    "pessoa_id": "p1",
+                    "tipo": "nivel_sarcasmo",
+                    "texto": None,
+                    "valor": "leve",
+                }
+            ],
+        )
+
+    banco = _banco(handler)
+    try:
+        atualizado = await banco.atualizar_ajuste("p1", "a1", None, "leve")
+    finally:
+        await banco.fechar()
+
+    assert atualizado is not None
+    assert atualizado["valor"] == "leve"
+    requisicao = chamadas[0]
+    assert requisicao.method == "PATCH"
+    assert requisicao.url.path == "/rest/v1/ajustes"
+    assert requisicao.url.params["id"] == "eq.a1"
+    assert requisicao.url.params["pessoa_id"] == "eq.p1"
+    assert json.loads(requisicao.content) == {"texto": None, "valor": "leve"}
