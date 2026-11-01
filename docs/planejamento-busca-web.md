@@ -260,15 +260,16 @@ No Render:
 
 ## Testes
 
-- [ ] Cliente de busca: sucesso, vazio, timeout, 429, JSON inválido.
-- [ ] Normalização e limite de resultados.
-- [ ] Cache: segunda chamada igual não bate na API.
-- [ ] Parser de `tool_calls` em streaming (incluindo argumentos partidos).
-- [ ] Loop: tool → resultado → resposta final.
-- [ ] Limite de 2 rodadas.
-- [ ] Ferramenta com erro → resposta graceful.
+- [x] Cliente de busca: sucesso, vazio, timeout, 429, JSON inválido.
+- [x] Normalização e limite de resultados.
+- [x] Cache: segunda chamada igual não bate na API.
+- [x] Parser de `tool_calls` em streaming (incluindo argumentos partidos).
+- [x] Loop: tool → resultado → resposta final.
+- [x] Limite de rodadas.
+- [x] Ferramenta com erro → resposta graceful.
 - [ ] Front: evento `tool` mostra “Pesquisando…” e `sources` renderiza.
-- [ ] Teste manual: clima, notícia, pergunta pessoal (não deve buscar).
+  O backend já emite os dois eventos; o front atual os ignora.
+- [x] Teste manual: clima, notícia, pergunta pessoal (não busca).
 
 ## Rollout
 
