@@ -192,7 +192,12 @@ ESQUEMA_JW = {
                 "chapter": {"type": "integer"},
                 "verse": {
                     "type": "string",
-                    "description": "'16', '3-5' ou '1,3,5'.",
+                    "description": (
+                        "Para get_bible_verse: um único número ('7'). Para "
+                        "get_verse_with_study: número ou faixa ('3-5'). Para "
+                        "get_bible_verse_url: número, faixa ('3-5') ou lista "
+                        "('1,3,5')."
+                    ),
                 },
                 "fields": {
                     "type": "array",
@@ -306,10 +311,10 @@ Você pode consultar a Bíblia e publicações com a ferramenta `jw`.
   - `search_bible_books`: `ferramenta=search_bible_books`, `query=matthew`;
     use antes para descobrir o número do livro (1–66).
   - `get_bible_verse`: `ferramenta=get_bible_verse`, `book=43`,
-    `chapter=3`, `verse=16`.
+    `chapter=3`, `verse=16` — um versículo só.
   - `get_verse_with_study`: `ferramenta=get_verse_with_study`, `book=40`,
     `chapter=5`, `verse=3-5`, `fields=[verses, study_notes,
-    study_articles]`.
+    study_articles]` — use esta para faixas.
   - `get_bible_verse_url`: `ferramenta=get_bible_verse_url`, `book=19`,
     `chapter=23`, `verse=1`.
   - `getWorkbookLinks`: `ferramenta=getWorkbookLinks`, `langwritten=T` —
@@ -491,6 +496,7 @@ async def _jw(
             for campo in _ARGUMENTOS_JW[ferramenta]
             if dados.get(campo) is not None
         }
+    argumentos = _normalizar_argumentos_jw(ferramenta, argumentos)
 
     resposta = await contexto.jw.executar(ferramenta, argumentos)
     return {
@@ -1022,3 +1028,41 @@ def _esquema_jw(permitidas: Sequence[str] | None = None) -> dict:
     enum = esquema["function"]["parameters"]["properties"]["ferramenta"]["enum"]
     enum[:] = [nome for nome in enum if nome in permitidas]
     return esquema
+
+
+def _inteiro(valor: Any) -> Any:
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return valor
+
+
+def _normalizar_argumentos_jw(
+    ferramenta: str, argumentos: Mapping
+) -> dict:
+    """Corrige tipos que o scraper do jw-mcp não aceita.
+
+    O `get_bible_verse` compara `verse_num === verse`, então precisa de um
+    inteiro; e só entende um versículo por vez. O `get_verse_with_study`
+    entende número ou faixa, mas não lista com vírgulas.
+    """
+    dados = dict(argumentos)
+    for campo in ("book", "chapter", "limit"):
+        if campo in dados:
+            dados[campo] = _inteiro(dados[campo])
+
+    verso = dados.get("verse")
+    if verso is None:
+        return dados
+    texto = str(verso).strip()
+
+    if ferramenta == "get_bible_verse":
+        primeiro = re.match(r"\d+", texto)
+        if primeiro:
+            dados["verse"] = int(primeiro.group(0))
+    elif ferramenta == "get_verse_with_study":
+        if "-" not in texto and "," in texto:
+            numeros = [int(numero) for numero in re.findall(r"\d+", texto)]
+            if numeros:
+                dados["verse"] = f"{min(numeros)}-{max(numeros)}"
+    return dados

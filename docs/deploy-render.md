@@ -139,6 +139,11 @@ No PWA, o botão **JW** no composer liga o modo de fonte única: a API desliga
 a busca na internet, usa apenas as ferramentas JW, aceita "pesquise" como
 pesquisa nas publicações e sempre devolve a lista de fontes no fim.
 
+> **Cold start:** no primeiro chat JW depois de 15 min parado, a API faz um
+> health-check no `sera-jw` e espera ele acordar antes de chamar o modelo
+> (até 60 s). Se o Render devolver `502` no meio de um redeploy, o cliente
+> JW tenta de novo automaticamente.
+
 ### Modelo do LLM
 
 O `LLM_MODEL` vem do ambiente e pode ser trocado no dashboard sem alterar o

@@ -20,6 +20,10 @@ class FakeJW:
         self.texto = texto
         self.erro = erro
         self.chamadas: list[tuple[str, dict]] = []
+        self.aquecimentos = 0
+
+    async def aquecer(self, **kwargs):
+        self.aquecimentos += 1
 
     async def executar(self, ferramenta: str, argumentos=None):
         self.chamadas.append((ferramenta, dict(argumentos or {})))

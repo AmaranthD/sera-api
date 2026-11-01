@@ -501,6 +501,22 @@ async def chat(
             status_code=503,
             detail="o modo JW não está disponível neste servidor",
         )
+    if modo_jw:
+        aquecer_jw = getattr(
+            getattr(request.app.state, "jw", None), "aquecer", None
+        )
+        if callable(aquecer_jw):
+            try:
+                await aquecer_jw(limite=min(60.0, config.jw_timeout))
+            except JWIndisponivel as erro:
+                logger.warning("serviço JW não acordou: %s", erro.detalhe)
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        "o serviço JW não respondeu; tente de novo em "
+                        "alguns instantes"
+                    ),
+                ) from erro
 
     if corpo.conversa_id is not None:
         conversa = await banco.obter_conversa(corpo.conversa_id)

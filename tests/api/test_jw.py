@@ -296,3 +296,77 @@ async def test_ultima_rodada_proibe_novas_ferramentas(config):
     # A última rodada mantém os esquemas, mas com tool_choice="none".
     assert fake.ferramentas is not None
     assert fake.escolha_ferramenta == "none"
+
+
+async def test_cliente_jw_aquece_e_reaproveita_o_cache():
+    caminhos: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        caminhos.append(request.url.path)
+        return httpx.Response(200, json={"status": "ok"})
+
+    cliente = ClienteJW(_config(), transporte=httpx.MockTransport(handler))
+    await cliente.aquecer()
+    await cliente.aquecer()
+
+    assert caminhos == ["/health"]
+
+
+async def test_cliente_jw_repete_502_do_render():
+    respostas = [
+        httpx.Response(502, text="<html>subindo</html>"),
+        httpx.Response(200, json=_resposta()),
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return respostas.pop(0)
+
+    cliente = ClienteJW(_config(), transporte=httpx.MockTransport(handler))
+    resposta = await cliente.executar("search_bible_books", {"query": "matthew"})
+
+    assert resposta.texto == "Matthew (40)"
+
+
+async def test_modo_jw_acorda_o_servico_antes_do_chat(config):
+    fake = FakeLLM(chunks=["ok"])
+    jw = FakeJW("Mateus")
+    app = criar_app(
+        replace(config, jw_api_url="https://jw.test/api", jw_api_key="chave"),
+        llm=fake,
+        jw=jw,
+    )
+    transporte = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transporte, base_url="http://test"
+    ) as cliente:
+        await criar_pessoa(cliente)
+        resposta = await cliente.post(
+            "/chat",
+            json={"pessoa_id": "maria", "mensagem": "oi", "fonte": "jw"},
+        )
+
+    assert resposta.status_code == 200
+    assert jw.aquecimentos == 1
+
+
+async def test_ferramenta_jw_normaliza_tipos_do_scraper():
+    jw = FakeJW("1 Pedro 5:7")
+    contexto = ContextoFerramentas(jw=jw)
+
+    await executar_ferramenta(
+        "jw",
+        '{"ferramenta": "get_bible_verse", "book": "60", '
+        '"chapter": "5", "verse": "7"}',
+        contexto,
+    )
+    await executar_ferramenta(
+        "jw",
+        '{"ferramenta": "get_verse_with_study", "book": 40, '
+        '"chapter": 6, "verse": "1,3,5"}',
+        contexto,
+    )
+
+    assert jw.chamadas == [
+        ("get_bible_verse", {"book": 60, "chapter": 5, "verse": 7}),
+        ("get_verse_with_study", {"book": 40, "chapter": 6, "verse": "1-5"}),
+    ]
