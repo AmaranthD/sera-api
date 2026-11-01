@@ -24,6 +24,7 @@ def config(tmp_path) -> Config:
     return Config(
         db_path=tmp_path / "sera.db",
         personality_path=RAIZ / "personality.yaml",
+        llm_provider="openai",
         llm_base_url="http://fake.local/v1",
         llm_model="fake-model",
     )

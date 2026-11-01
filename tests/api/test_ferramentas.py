@@ -2,6 +2,7 @@ import pytest
 
 from sera.api.busca import ResultadoBusca
 from sera.api.ferramentas import (
+    ContextoFerramentas,
     FerramentaInvalida,
     bloco_resultados,
     consulta_explicita,
@@ -51,7 +52,7 @@ async def test_executar_ferramenta_pesquisa_web():
     resultado = await executar_ferramenta(
         "pesquisar_web",
         '{"consulta": "clima em Recife"}',
-        BuscaFalsa(),
+        ContextoFerramentas(busca=BuscaFalsa()),
     )
 
     assert chamadas == ["clima em Recife"]
@@ -60,7 +61,9 @@ async def test_executar_ferramenta_pesquisa_web():
 
 async def test_executar_ferramenta_rejeita_json_invalido():
     with pytest.raises(FerramentaInvalida):
-        await executar_ferramenta("pesquisar_web", "{nao é json", None)
+        await executar_ferramenta(
+            "pesquisar_web", "{nao é json", ContextoFerramentas()
+        )
 
 
 def test_bloco_resultados_delimita_conteudo_nao_confiavel():

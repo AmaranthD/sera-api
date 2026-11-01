@@ -35,12 +35,17 @@ from .config import Config
 from .db import Banco
 from .db_supabase import Conflito
 from .ferramentas import (
-    FERRAMENTAS,
     INSTRUCAO_BUSCA,
+    INSTRUCAO_MEMORIA,
+    NOME_AJUSTAR,
+    NOME_LEMBRAR,
+    NOME_PESQUISA,
+    ContextoFerramentas,
     FerramentaDesconhecida,
     FerramentaInvalida,
     bloco_resultados,
     consulta_explicita,
+    esquemas,
     executar_ferramenta,
 )
 from .llm import (
@@ -52,6 +57,8 @@ from .llm import (
     Fim,
     Uso,
 )
+from .relogio import agora as agora_do_fuso
+from .relogio import bloco_agora, normalizar_consulta
 from .schemas import (
     AjusteEntrada,
     ChatEntrada,
@@ -374,11 +381,15 @@ async def chat(
         conversa["id"], "user", corpo.mensagem
     )
 
+    momento = agora_do_fuso(config.fuso_horario)
     system = await _montar_system(
-        personality, linha_pessoa, banco, config, corpo.mensagem
+        personality, linha_pessoa, banco, config, corpo.mensagem, momento
     )
-    busca, ferramentas, fontes, system = await _preparar_busca(
-        request, config, corpo.mensagem, system
+    busca, ferramentas, fontes, system = await _preparar_ferramentas(
+        request, config, corpo.mensagem, system, momento
+    )
+    contexto = ContextoFerramentas(
+        busca=busca, banco=banco, pessoa_id=pessoa_id
     )
     mensagens = [{"role": "system", "content": system}]
     mensagens.extend(
@@ -393,8 +404,9 @@ async def chat(
             config,
             conversa["id"],
             mensagens,
-            busca=busca,
+            contexto=contexto,
             ferramentas=ferramentas,
+            momento=momento,
         )
 
     return await _resposta_stream(
@@ -405,53 +417,69 @@ async def chat(
         conversa["id"],
         mensagem_usuario["id"],
         mensagens,
-        busca=busca,
+        contexto=contexto,
         ferramentas=ferramentas,
         fontes=fontes,
+        momento=momento,
     )
 
 
-async def _preparar_busca(
+async def _preparar_ferramentas(
     request: Request,
     config: Config,
     mensagem: str,
     system: str,
+    momento: datetime,
 ) -> tuple[ClienteTavily | None, list[dict] | None, list[dict], str]:
-    """Liga as ferramentas e, se o pedido for explícito, já busca antes.
+    """Liga busca e aprendizado e, no pedido explícito, já busca antes.
 
     "Pesquise X" é interpretado como busca na internet sem depender de o
     modelo decidir chamar a ferramenta.
     """
     busca: ClienteTavily | None = getattr(request.app.state, "busca", None)
-    if not config.busca_ativa or busca is None:
+    if not config.busca_ativa:
+        busca = None
+
+    # O cliente Gemini desta camada ainda não executa tool calling.
+    tool_calling = config.llm_provider == "openai"
+    aprendizado = config.aprendizado_habilitado and tool_calling
+    ferramentas = esquemas(
+        busca=busca is not None and tool_calling,
+        aprendizado=aprendizado,
+    )
+    if not ferramentas and busca is None:
         return None, None, [], system
 
     fontes: list[dict] = []
-    consulta = consulta_explicita(mensagem)
+    consulta = consulta_explicita(mensagem) if busca is not None else None
 
-    if consulta is None:
-        # O cliente Gemini desta camada ainda não executa tool calling.
-        if config.llm_provider != "openai":
-            return busca, None, fontes, system
+    if consulta is not None:
+        consulta = normalizar_consulta(consulta, momento)
+        try:
+            resultados = await busca.pesquisar(consulta)
+        except BuscaIndisponivel as erro:
+            logger.warning("busca explícita falhou: %s", erro.detalhe)
+            system = (
+                f"{system}\n\n## Busca na internet\n"
+                "A busca falhou agora. Responda sem inventar dados e avise "
+                "que não conseguiu consultar a internet."
+            )
+        else:
+            fontes = [resultado.como_dict() for resultado in resultados]
+            system = f"{system}\n\n{bloco_resultados(consulta, resultados, momento)}"
+        # Já buscou: tira a ferramenta de pesquisa para não repetir a consulta.
+        ferramentas = [
+            ferramenta
+            for ferramenta in ferramentas
+            if ferramenta["function"]["name"] != NOME_PESQUISA
+        ]
+    elif busca is not None and tool_calling:
         system = f"{system}\n\n{INSTRUCAO_BUSCA}"
-        return busca, list(FERRAMENTAS), fontes, system
 
-    try:
-        resultados = await busca.pesquisar(consulta)
-    except BuscaIndisponivel as erro:
-        logger.warning("busca explícita falhou: %s", erro.detalhe)
-        system = (
-            f"{system}\n\n## Busca na internet\n"
-            "A busca falhou agora. Responda sem inventar dados e avise que "
-            "não conseguiu consultar a internet."
-        )
-        return busca, None, fontes, system
+    if aprendizado:
+        system = f"{system}\n\n{INSTRUCAO_MEMORIA}"
 
-    fontes = [resultado.como_dict() for resultado in resultados]
-    system = f"{system}\n\n{bloco_resultados(consulta, resultados)}"
-    # A busca já foi feita: sem ferramentas nesta resposta para não repetir
-    # consultas nem expor o loop de tool calling.
-    return busca, None, fontes, system
+    return busca, ferramentas or None, fontes, system
 
 
 async def _montar_system(
@@ -460,6 +488,7 @@ async def _montar_system(
     banco: Banco,
     config: Config,
     mensagem: str,
+    momento: datetime,
 ) -> str:
     pessoa = Pessoa(
         nome=linha_pessoa["nome"],
@@ -488,7 +517,7 @@ async def _montar_system(
         nao_mencionar=tuple(await banco.listar_temas(linha_pessoa["id"])),
     )
     trechos = await _buscar_contexto(banco, linha_pessoa, config, mensagem)
-    return montar(
+    base = montar(
         personality,
         pessoa,
         ajustes,
@@ -496,6 +525,7 @@ async def _montar_system(
         trechos,
         max_chars_contexto=config.max_chars_contexto,
     ).render()
+    return f"{base}\n\n{bloco_agora(momento, config.fuso_horario)}"
 
 
 async def _buscar_contexto(
@@ -517,14 +547,16 @@ async def _resposta_unica(
     conversa_id: str,
     mensagens: list[dict],
     *,
-    busca: ClienteTavily | None = None,
+    contexto: ContextoFerramentas | None = None,
     ferramentas: list[dict] | None = None,
+    momento: datetime | None = None,
 ) -> dict:
+    contexto = contexto or ContextoFerramentas()
     partes: list[str] = []
     uso: Uso | None = None
     try:
         async for evento in _fluxo_com_ferramentas(
-            llm, mensagens, config, busca, ferramentas
+            llm, mensagens, config, contexto, ferramentas, momento
         ):
             if isinstance(evento, Delta):
                 partes.append(evento.texto)
@@ -551,8 +583,9 @@ async def _fluxo_com_ferramentas(
     llm: ClienteLLM,
     mensagens: list[dict],
     config: Config,
-    busca: ClienteTavily | None,
+    contexto: ContextoFerramentas,
     ferramentas: list[dict] | None,
+    momento: datetime | None = None,
 ):
     """Executa o loop de tool calling e emite Delta/Fim e eventos de busca.
 
@@ -562,7 +595,7 @@ async def _fluxo_com_ferramentas(
     vê apenas system/user e, na última rodada, responde sem ferramentas.
     """
     conversa = [dict(mensagem) for mensagem in mensagens]
-    rodadas = config.busca_max_rodadas if busca is not None and ferramentas else 0
+    rodadas = config.busca_max_rodadas if ferramentas else 0
     chamadas: list[ChamadaFerramenta] = []
 
     if rodadas == 0:
@@ -588,26 +621,32 @@ async def _fluxo_com_ferramentas(
             else:
                 yield evento
 
-        if not chamadas or busca is None:
+        if not chamadas:
             return
 
         for chamada in chamadas:
-            yield Pesquisando(_consulta_da_chamada(chamada))
+            if chamada.nome == NOME_PESQUISA:
+                yield Pesquisando(_consulta_da_chamada(chamada, momento))
 
-        bloco, fontes = await _buscar_chamadas(chamadas, busca)
+        blocos, fontes, notas = await _executar_chamadas(
+            chamadas, contexto, momento
+        )
         if fontes:
             yield Fontes(tuple(fontes))
-        if bloco:
+        extras = blocos + notas
+        if extras:
             conversa[0]["content"] = (
-                f"{conversa[0].get('content') or ''}\n\n{bloco}"
+                f"{conversa[0].get('content') or ''}\n\n"
+                + "\n\n".join(extras)
             )
 
     # Última rodada: sem ferramentas, para o modelo fechar a resposta com o
-    # que já foi encontrado. Tirar a instrução de ferramentas do system evita
-    # que o modelo tente chamar algo que não existe mais.
-    conversa[0]["content"] = (
-        f"{conversa[0].get('content') or ''}".replace(INSTRUCAO_BUSCA, "")
-    ).strip()
+    # que já foi encontrado. Tirar as instruções do system evita que o modelo
+    # tente chamar algo que não existe mais.
+    conteudo = f"{conversa[0].get('content') or ''}"
+    for instrucao in (INSTRUCAO_BUSCA, INSTRUCAO_MEMORIA):
+        conteudo = conteudo.replace(instrucao, "")
+    conversa[0]["content"] = conteudo.strip()
     async for evento in llm.stream(
         conversa,
         temperatura=config.temperatura,
@@ -618,18 +657,30 @@ async def _fluxo_com_ferramentas(
             yield evento
 
 
-async def _buscar_chamadas(
-    chamadas: list[ChamadaFerramenta], busca: ClienteTavily
-) -> tuple[str, list[dict]]:
+async def _executar_chamadas(
+    chamadas: list[ChamadaFerramenta],
+    contexto: ContextoFerramentas,
+    momento: datetime | None = None,
+) -> tuple[list[str], list[dict], list[str]]:
     blocos: list[str] = []
     fontes: list[dict] = []
+    notas: list[str] = []
     vistos: set[str] = set()
 
     for chamada in chamadas:
-        consulta = _consulta_da_chamada(chamada)
+        consulta = (
+            _consulta_da_chamada(chamada, momento)
+            if chamada.nome == NOME_PESQUISA
+            else ""
+        )
+        argumentos = (
+            {"consulta": consulta}
+            if chamada.nome == NOME_PESQUISA
+            else chamada.argumentos
+        )
         try:
             resultado = await executar_ferramenta(
-                chamada.nome, chamada.argumentos, busca
+                chamada.nome, argumentos, contexto
             )
         except (
             FerramentaDesconhecida,
@@ -637,36 +688,68 @@ async def _buscar_chamadas(
             BuscaIndisponivel,
         ) as erro:
             logger.warning("ferramenta falhou: %s", erro)
-            blocos.append(
-                "## Busca na internet\n"
-                f'A busca por "{consulta}" falhou: {erro}. '
-                "Responda sem inventar dados e avise que não conseguiu "
-                "consultar a internet."
-            )
+            if chamada.nome == NOME_PESQUISA:
+                blocos.append(
+                    "## Busca na internet\n"
+                    f'A busca por "{consulta}" falhou: {erro}. '
+                    "Responda sem inventar dados e avise que não conseguiu "
+                    "consultar a internet."
+                )
+            else:
+                notas.append(
+                    f"Não foi possível salvar ({chamada.nome}): {erro}."
+                )
             continue
 
-        itens = resultado.get("resultados") or []
-        resultados = [ResultadoBusca(**item) for item in itens]
-        blocos.append(
-            bloco_resultados(resultado.get("consulta") or consulta, resultados)
-        )
-        for item in itens:
-            url = item.get("url")
-            if url and url not in vistos:
-                vistos.add(url)
-                fontes.append(item)
+        if chamada.nome == NOME_PESQUISA:
+            itens = resultado.get("resultados") or []
+            resultados = [ResultadoBusca(**item) for item in itens]
+            blocos.append(
+                bloco_resultados(
+                    resultado.get("consulta") or consulta,
+                    resultados,
+                    momento,
+                )
+            )
+            for item in itens:
+                url = item.get("url")
+                if url and url not in vistos:
+                    vistos.add(url)
+                    fontes.append(item)
+        else:
+            notas.append(_nota_de_ferramenta(chamada.nome, resultado))
 
-    return "\n\n".join(blocos), fontes
+    return blocos, fontes, notas
 
 
-def _consulta_da_chamada(chamada: ChamadaFerramenta) -> str:
+def _nota_de_ferramenta(nome: str, resultado: dict) -> str:
+    if nome == NOME_LEMBRAR:
+        if resultado.get("duplicada"):
+            return "Essa memória já existia; nada novo foi salvo."
+        memoria = resultado.get("memoria") or {}
+        return f"Guardei na memória: {memoria.get('texto')}."
+    if nome == NOME_AJUSTAR:
+        if resultado.get("duplicado"):
+            return "Essa preferência já estava registrada."
+        ajuste = resultado.get("ajuste") or {}
+        alvo = ajuste.get("texto") or ajuste.get("valor") or ""
+        return f"Preferência atualizada: {ajuste.get('tipo')} = {alvo}."
+    return ""
+
+
+def _consulta_da_chamada(
+    chamada: ChamadaFerramenta, momento: datetime | None = None
+) -> str:
     try:
         dados = json.loads(chamada.argumentos or "{}")
     except json.JSONDecodeError:
         return ""
     if not isinstance(dados, dict):
         return ""
-    return " ".join(str(dados.get("consulta") or "").split())
+    consulta = " ".join(str(dados.get("consulta") or "").split())
+    if momento is not None and consulta:
+        consulta = normalizar_consulta(consulta, momento)
+    return consulta
 
 
 async def _resposta_stream(
@@ -678,11 +761,15 @@ async def _resposta_stream(
     mensagem_usuario_id: str,
     mensagens: list[dict],
     *,
-    busca: ClienteTavily | None = None,
+    contexto: ContextoFerramentas | None = None,
     ferramentas: list[dict] | None = None,
     fontes: list[dict] | None = None,
+    momento: datetime | None = None,
 ) -> StreamingResponse:
-    fluxo = _fluxo_com_ferramentas(llm, mensagens, config, busca, ferramentas)
+    contexto = contexto or ContextoFerramentas()
+    fluxo = _fluxo_com_ferramentas(
+        llm, mensagens, config, contexto, ferramentas, momento
+    )
     try:
         primeiro = await anext(fluxo)
     except StopAsyncIteration:

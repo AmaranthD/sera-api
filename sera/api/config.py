@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 _RAIZ = Path(__file__).resolve().parents[2]
 _ARQUIVOS_ENV = (Path(".env"), _RAIZ / ".env", _RAIZ / "sera" / "api" / ".env")
@@ -67,6 +68,8 @@ class Config:
     busca_cache_ttl: float = 600.0
     busca_pais: str = "BR"
     busca_max_rodadas: int = 1
+    fuso_horario: str = "America/Sao_Paulo"
+    aprendizado_habilitado: bool = True
     supabase_url: str | None = None
     supabase_anon_key: str | None = None
     supabase_jwt_aud: str = "authenticated"
@@ -99,6 +102,12 @@ class Config:
             raise ValueError("busca_cache_ttl não pode ser negativo")
         if self.busca_max_rodadas < 1:
             raise ValueError("busca_max_rodadas precisa ser pelo menos 1")
+        try:
+            ZoneInfo(self.fuso_horario)
+        except (ValueError, ZoneInfoNotFoundError) as erro:
+            raise ValueError(
+                f"fuso_horario inválido: {self.fuso_horario!r}"
+            ) from erro
         if self.llm_provider not in ("gemini", "openai"):
             raise ValueError(
                 f"llm_provider inválido: {self.llm_provider!r}; "
@@ -196,6 +205,9 @@ class Config:
             busca_cache_ttl=numero("BUSCA_CACHE_TTL", 600.0),
             busca_pais=texto("BUSCA_PAIS", "BR"),
             busca_max_rodadas=inteiro("BUSCA_MAX_RODADAS", 1),
+            fuso_horario=texto("SERA_FUSO", "America/Sao_Paulo"),
+            aprendizado_habilitado=texto("SERA_APRENDIZADO", "true").lower()
+            in ("1", "true", "yes", "on"),
             supabase_url=opcional("SUPABASE_URL"),
             supabase_anon_key=(
                 opcional("SUPABASE_ANON_KEY")

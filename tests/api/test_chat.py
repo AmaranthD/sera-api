@@ -1,4 +1,6 @@
 from dataclasses import replace
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -6,6 +8,7 @@ import pytest
 from sera.api import Config, criar_app
 from sera.api.busca import BuscaIndisponivel, ResultadoBusca
 from sera.api.llm import ChamadaFerramenta
+from sera.api.relogio import normalizar_consulta
 from tests.api.ajuda import (
     FakeBusca,
     FakeLLM,
@@ -347,7 +350,10 @@ async def test_busca_desligada_nao_passa_ferramentas(cliente, fake):
         "/chat",
         json={"pessoa_id": "maria", "mensagem": "pesquise o dólar hoje"},
     )
-    assert fake.ferramentas is None
+    nomes = {item["function"]["name"] for item in (fake.ferramentas or [])}
+    assert "pesquisar_web" not in nomes
+    # O aprendizado continua disponível mesmo com a busca desligada.
+    assert {"lembrar", "ajustar_preferencia"} <= nomes
 
 
 async def test_pesquisa_explicita_consulta_antes_do_modelo(config, fake):
@@ -365,8 +371,10 @@ async def test_pesquisa_explicita_consulta_antes_do_modelo(config, fake):
     assert busca.consultas == ["a previsão do tempo em São Paulo"]
     assert "Resultados da busca na internet" in system_prompt(fake)
     assert "https://exemplo.com/tempo" in system_prompt(fake)
-    # A busca já foi feita; o modelo não recebe ferramentas nesta resposta.
-    assert fake.ferramentas is None
+    # A busca já foi feita; a ferramenta de pesquisa não é oferecida de novo.
+    nomes = {item["function"]["name"] for item in (fake.ferramentas or [])}
+    assert "pesquisar_web" not in nomes
+    assert "lembrar" in nomes
 
     ev = eventos(resposta.text)
     fontes = [dados for nome, dados in ev if nome == "sources"]
@@ -391,7 +399,12 @@ async def test_modelo_decide_pesquisar_por_tool_call(config, fake):
             json={"pessoa_id": "maria", "mensagem": "quanto está o dólar hoje?"},
         )
 
-    assert busca.consultas == ["dólar hoje"]
+    assert busca.consultas == [
+        normalizar_consulta(
+            "dólar hoje",
+            datetime.now(ZoneInfo("America/Sao_Paulo")),
+        )
+    ]
     assert fake.chamadas_recebidas == 2
     assert "https://exemplo.com/tempo" in system_prompt(fake)
     assert fake.mensagens[-1]["role"] == "user"
@@ -414,5 +427,41 @@ async def test_busca_falhando_nao_quebra_o_chat(config, fake):
     assert resposta.status_code == 200
     assert "A busca falhou agora" in system_prompt(fake)
     assert tokens(eventos(resposta.text)) == ["Olá", ", ", "Maria!"]
+
+
+async def test_system_prompt_inclui_data_e_hora(cliente, fake):
+    await criar_pessoa(cliente)
+    await cliente.post("/chat", json={"pessoa_id": "maria", "mensagem": "Oi"})
+
+    prompt = system_prompt(fake)
+    hoje = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%d/%m/%Y")
+    assert "# AGORA" in prompt
+    assert f'"hoje" = {hoje}' in prompt
+    assert "Nunca diga que não sabe a data de hoje" in prompt
+
+
+async def test_modelo_pode_lembrar_no_chat(cliente, fake):
+    await criar_pessoa(cliente)
+    fake.chamadas = [
+        ChamadaFerramenta(
+            id="call_1",
+            nome="lembrar",
+            argumentos='{"texto": "Gosta de jazz", "categoria": "gostos"}',
+        )
+    ]
+    fake.chunks = ["Anotado."]
+
+    resposta = await cliente.post(
+        "/chat",
+        json={"pessoa_id": "maria", "mensagem": "lembre que eu gosto de jazz"},
+    )
+
+    assert fake.chamadas_recebidas == 2
+    assert tokens(eventos(resposta.text)) == ["Anotado."]
+    assert "Guardei na memória: Gosta de jazz." in system_prompt(fake)
+
+    memorias = await cliente.get("/pessoas/maria/memorias")
+    assert [item["texto"] for item in memorias.json()] == ["Gosta de jazz"]
+
 
 

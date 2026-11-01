@@ -22,6 +22,9 @@
 - Os resultados entram no próprio system prompt, não como mensagens
   `assistant`/`tool` — isso evita o vazamento de marcação interna do
   MiniMax via NVIDIA NIM.
+- **Datas relativas:** "hoje", "ontem", "última semana" e "mês passado" são
+  convertidos em datas absolutas antes da busca (ver
+  `docs/memoria-e-relogio.md`).
 
 ## Contexto atual
 

@@ -52,6 +52,10 @@ services:
         value: "1"
       - key: TAVILY_API_KEY
         sync: false
+      - key: SERA_FUSO
+        value: America/Sao_Paulo
+      - key: SERA_APRENDIZADO
+        value: "true"
       # Opcional: lista fechada de e-mails. Descomente e preencha para
       # impedir que qualquer conta autenticada use a API.
       # - key: SERA_EMAILS
