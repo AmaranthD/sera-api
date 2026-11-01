@@ -12,6 +12,7 @@ import { AvisoAcordando } from './AvisoAcordando'
 import { Composer } from './Composer'
 import { ConteudoLateral } from './ConteudoLateral'
 import { DrawerConversas } from './DrawerConversas'
+import { FundoPaladina } from './FundoPaladina'
 import { PainelConversa } from './PainelConversa'
 import estilos from './Chat.module.css'
 
@@ -87,6 +88,7 @@ export function ChatTela() {
       </aside>
 
       <main className={estilos.principal} id="conteudo">
+        <FundoPaladina />
         <header className={estilos.cabecalho}>
           <button
             type="button"

@@ -24,7 +24,7 @@ export function Marca({
   return (
     <span className={classes} aria-label="Sera">
       <span className={estilos.monograma} aria-hidden="true">
-        S
+        <img src="/marca-sera.webp" alt="" />
       </span>
       {somenteMonograma ? null : (
         <span className={estilos.texto}>

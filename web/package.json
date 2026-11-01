@@ -17,9 +17,12 @@
     "e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "icones": "node scripts/gerar-icones.mjs"
+    "icones": "node scripts/gerar-icones.mjs",
+    "assets:design": "node scripts/gerar-assets-design.mjs"
   },
   "dependencies": {
+    "@fontsource/cinzel": "^5.3.0",
+    "@fontsource/silkscreen": "^5.3.0",
     "@supabase/supabase-js": "^2.118.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

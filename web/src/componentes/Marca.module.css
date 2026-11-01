@@ -2,7 +2,7 @@
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  color: var(--indigo-escuro);
+  color: var(--tinta);
 }
 
 .monograma {
@@ -10,16 +10,20 @@
   place-items: center;
   width: 44px;
   height: 44px;
-  border-radius: 14px;
-  background: var(--indigo);
-  color: var(--texto-sobre-indigo);
-  font-family: var(--fonte-titulo);
-  font-size: 26px;
-  line-height: 1;
-  padding-bottom: 2px;
-  box-shadow: inset 0 0 0 1px
-    color-mix(in srgb, var(--texto-sobre-indigo) 14%, transparent);
   flex: none;
+  overflow: hidden;
+  padding: 0;
+  border: 2px solid var(--ouro);
+  border-radius: var(--raio-pequeno);
+  background: var(--painel);
+  box-shadow: 2px 2px 0 var(--sombra-dura-cor);
+}
+
+.monograma img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
 }
 
 .texto {
@@ -30,14 +34,16 @@
 }
 
 .nome {
-  font-family: var(--fonte-titulo);
-  font-size: 27px;
-  letter-spacing: 0.01em;
+  font-family: var(--fonte-pixel);
+  font-size: 24px;
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 .legenda {
-  font-size: 12px;
-  letter-spacing: 0.14em;
+  font-family: var(--fonte-pixel);
+  font-size: 8px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--tinta-fraca);
 }
@@ -47,8 +53,8 @@
 }
 
 .clara .monograma {
-  background: var(--painel-texto);
-  color: var(--painel);
+  border-color: var(--painel-brilho);
+  background: var(--painel-2);
 }
 
 .clara .legenda {
@@ -58,12 +64,10 @@
 .pequena .monograma {
   width: 34px;
   height: 34px;
-  border-radius: 11px;
-  font-size: 20px;
 }
 
 .pequena .nome {
-  font-size: 21px;
+  font-size: 19px;
 }
 
 .somenteMonograma {

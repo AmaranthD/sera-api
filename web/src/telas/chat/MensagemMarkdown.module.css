@@ -72,8 +72,8 @@
 .markdown blockquote {
   margin: 0.7em 0;
   padding: 0.15em 0 0.15em 0.9em;
-  border-left: 3px solid var(--indigo-claro);
-  color: var(--tinta-suave);
+  border-left: 3px solid var(--chat-ouro);
+  color: var(--chat-texto-suave);
 }
 
 .markdown blockquote p:last-child {
@@ -82,8 +82,8 @@
 
 .markdown code {
   padding: 0.12em 0.35em;
-  border-radius: 5px;
-  background: var(--paper-alto);
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.9em;
 }
@@ -92,9 +92,9 @@
   margin: 0.7em 0;
   padding: 12px 14px;
   overflow-x: auto;
-  border: 1px solid var(--linha);
-  border-radius: 10px;
-  background: var(--paper-alto);
+  border: 1px solid var(--chat-linha);
+  border-radius: var(--raio-pequeno);
+  background: rgba(0, 0, 0, 0.32);
   font-size: 0.86em;
   line-height: 1.5;
 }
@@ -106,19 +106,19 @@
 }
 
 .markdown a {
-  color: var(--indigo);
+  color: var(--chat-ouro);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .markdown a:hover {
-  color: var(--indigo-escuro);
+  color: #f0c96a;
 }
 
 .markdown hr {
   margin: 1em 0;
   border: 0;
-  border-top: 1px solid var(--linha);
+  border-top: 1px solid var(--chat-linha);
 }
 
 .markdown .tabela {
@@ -135,13 +135,13 @@
 .markdown th,
 .markdown td {
   padding: 6px 9px;
-  border: 1px solid var(--linha);
+  border: 1px solid var(--chat-linha);
   text-align: left;
   vertical-align: top;
 }
 
 .markdown th {
-  background: var(--paper-alto);
+  background: rgba(255, 255, 255, 0.06);
   font-weight: 650;
 }
 

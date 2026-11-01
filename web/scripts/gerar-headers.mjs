@@ -61,6 +61,7 @@ const csp = [
   "frame-ancestors 'none'",
   "form-action 'self'",
   "img-src 'self' data:",
+  "media-src 'self'",
   "font-src 'self'",
   "style-src 'self'",
   "script-src 'self'",

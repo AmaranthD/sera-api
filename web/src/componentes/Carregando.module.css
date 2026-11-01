@@ -20,7 +20,7 @@
   height: 58px;
   display: grid;
   place-items: center;
-  border-radius: 18px;
+  border-radius: var(--raio-pequeno);
   background: var(--indigo);
   color: var(--texto-sobre-indigo);
   font-family: var(--fonte-titulo);

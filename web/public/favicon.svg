@@ -1,7 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sera">
-  <rect width="512" height="512" rx="116" fill="#4f46e5"/>
-  <circle cx="256" cy="256" r="188" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2"/>
-  <text x="256" y="352" text-anchor="middle"
-        font-family="Georgia, 'Iowan Old Style', 'Palatino Linotype', 'DejaVu Serif', serif"
-        font-size="300" fill="#ffffff">S</text>
+  <rect width="512" height="512" rx="64" fill="#0b1020" />
+  <rect x="16" y="16" width="480" height="480" rx="48" fill="none" stroke="#d8ad5c" stroke-width="8" />
+  <path
+    d="M256 88 408 156v132c0 100-66 150-152 184-86-34-152-84-152-184V156Z"
+    fill="#111a30"
+    stroke="#d8ad5c"
+    stroke-width="8"
+  />
+  <path d="M256 156v188M188 230h136" stroke="#e9edf8" stroke-width="12" />
+  <path d="M214 118c14-14 70-14 84 0" fill="none" stroke="#e9edf8" stroke-width="8" />
 </svg>

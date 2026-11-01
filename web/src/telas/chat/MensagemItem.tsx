@@ -40,7 +40,7 @@ export function MensagemItem({ mensagem, transcrevendo }: Props) {
   return (
     <article className={estilos.assistente} aria-label="Resposta da Sera">
       <span className={estilos.avatarSera} aria-hidden="true">
-        S
+        <img src="/marca-sera.webp" alt="" />
       </span>
       <div className={estilos.assistenteCorpo}>
         <div className={estilos.balaoAssistente}>

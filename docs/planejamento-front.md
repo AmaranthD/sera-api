@@ -10,6 +10,8 @@
 > SSE, PWA). O backend já está pronto para JWT + PostgREST (ADR 0004); este
 > documento registra o contrato e o que falta do lado do navegador.
 
+> **Design v1:** ver `imgs/DESIGN.md` para paleta, tipografia, pixel art, logo e vídeo de fundo.
+
 ## Objetivo
 
 Entregar um PWA instalável, mobile-first, que usa a API existente sem

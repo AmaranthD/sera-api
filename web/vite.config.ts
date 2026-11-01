@@ -18,8 +18,8 @@ export default defineConfig({
         scope: '/',
         display: 'standalone',
         orientation: 'portrait-primary',
-        background_color: '#4f46e5',
-        theme_color: '#4f46e5',
+        background_color: '#0b1020',
+        theme_color: '#0b1020',
         categories: ['lifestyle', 'social'],
         icons: [
           {
@@ -41,7 +41,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
+        globIgnores: ['**/fundo/paladina.webm', '**/fundo/paladina.mp4'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,

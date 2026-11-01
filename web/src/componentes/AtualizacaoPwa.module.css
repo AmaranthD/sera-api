@@ -1,19 +1,19 @@
 .banner {
   position: fixed;
-  left: 50%;
-  bottom: calc(18px + env(safe-area-inset-bottom));
-  transform: translateX(-50%);
+  right: 18px;
+  bottom: calc(110px + env(safe-area-inset-bottom));
   z-index: 70;
   display: flex;
   align-items: center;
   gap: 12px;
-  width: min(560px, calc(100vw - 28px));
-  padding: 13px 16px;
-  border-radius: 16px;
-  background: var(--indigo-escuro);
-  color: var(--texto-sobre-indigo);
-  box-shadow: var(--sombra);
-  font-size: 14.5px;
+  width: min(420px, calc(100vw - 28px));
+  padding: 12px 14px;
+  border: 2px solid var(--chat-ouro);
+  border-radius: var(--raio-pequeno);
+  background: rgba(8, 12, 24, 0.96);
+  color: var(--chat-texto);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45);
+  font-size: 13.5px;
 }
 
 .texto {
@@ -28,26 +28,31 @@
 }
 
 .atualizar {
-  border: 1px solid color-mix(in srgb, var(--texto-sobre-indigo) 35%, transparent);
+  border: 1px solid var(--chat-ouro);
+  border-radius: 2px;
   background: transparent;
-  color: inherit;
-  font-weight: 650;
-  font-size: 13.5px;
-  padding: 7px 12px;
-  border-radius: 999px;
+  color: var(--chat-ouro);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 7px 10px;
 }
 
 .fechar {
   border: 0;
+  border-radius: 2px;
   background: transparent;
-  color: inherit;
+  color: var(--chat-texto-suave);
   padding: 6px;
-  border-radius: 50%;
   opacity: 0.8;
 }
 
 @media (max-width: 520px) {
   .banner {
+    right: 14px;
+    left: 14px;
+    width: auto;
     align-items: flex-start;
     flex-direction: column;
   }

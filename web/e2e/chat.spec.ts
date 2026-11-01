@@ -79,7 +79,19 @@ test('respeita o tema escuro do sistema', async ({ page }) => {
   const fundo = await page.evaluate(
     () => getComputedStyle(document.body).backgroundColor,
   )
-  expect(fundo).toBe('rgb(0, 0, 0)')
+  expect(fundo).toBe('rgb(7, 10, 20)')
+})
+
+test('mostra a paladina bem apagada no fundo do chat', async ({ page }) => {
+  await page.goto('/')
+
+  const video = page.locator('video[poster="/fundo/paladina-poster.webp"]')
+  await expect(video).toHaveCount(1)
+  const opacidade = await video.evaluate((elemento) =>
+    Number(getComputedStyle(elemento).opacity),
+  )
+  expect(opacidade).toBeGreaterThan(0)
+  expect(opacidade).toBeLessThanOrEqual(0.16)
 })
 
 test('abre offline com o shell e o composer desabilitado', async ({

@@ -95,18 +95,24 @@ export function Login() {
   return (
     <div className={estilos.pagina}>
       <aside className={estilos.marca}>
-        <Marca clara legenda="conversa" />
-        <div className={estilos.frase}>
-          <p className={estilos.olho}>Um lugar calmo</p>
-          <h1>Para falar do dia, lembrar de coisas e pensar em voz alta.</h1>
-          <p>
-            Conversas só suas, sem senha e sem pressa. A Sera escuta, responde e lembra
-            do que importa para você.
-          </p>
+        <div className={estilos.hero} aria-hidden="true">
+          <img src="/paladina.webp" alt="" />
+          <div className={estilos.heroVeu} />
         </div>
-        <div className={estilos.selo}>
-          <Icone nome="escudo" tamanho={17} />
-          <span>Suas conversas ficam entre você e a Sera.</span>
+        <div className={estilos.conteudo}>
+          <Marca clara legenda="conversa" />
+          <div className={estilos.frase}>
+            <p className={estilos.olho}>Um lugar calmo</p>
+            <h1>Para falar do dia, lembrar de coisas e pensar em voz alta.</h1>
+            <p>
+              Conversas só suas, sem senha e sem pressa. A Sera escuta, responde e
+              lembra do que importa para você.
+            </p>
+          </div>
+          <div className={estilos.selo}>
+            <Icone nome="escudo" tamanho={17} />
+            <span>Suas conversas ficam entre você e a Sera.</span>
+          </div>
         </div>
       </aside>
 
