@@ -1,7 +1,7 @@
 # Planejamento — front (PWA) no Cloudflare Pages conectado à API
 
 > **Status em 2026-10-31:** fases 0 a 3 implementadas em `web/` e verificadas
-> com lint, typecheck, 68 testes unitários/componente, 6 E2E e build de
+> com lint, typecheck, 68 testes unitários/componente, 7 E2E e build de
 > produção. O que depende de conta externa — criar o projeto no Cloudflare
 > Pages, configurar Redirect URLs de produção e rodar a matriz manual de
 > aparelhos — continua pendente e está marcado nas fases. Decisões fechadas:
@@ -460,7 +460,7 @@ automático nos dois. Ao trocar para domínio próprio:
 | Manual | matriz de dispositivos | iOS Safari (PWA), Android Chrome, desktop; 3G lento; cold start do Render; link mágico com SW ativo |
 
 - Arena de testes implementada: 68 testes Vitest (parser, HTTP, contrato,
-  domínio, login, onboarding e componentes) e 6 E2E Playwright com Supabase
+  domínio, login, onboarding e componentes) e 7 E2E Playwright com Supabase
   falso. A matriz de dispositivo e o axe automatizado continuam
   manuais/pendentes.
 - MSW simula `text/event-stream` com chunks controlados (inclusive atraso
@@ -498,6 +498,9 @@ automático nos dois. Ao trocar para domínio próprio:
   `rehype-sanitize`; HTML bruto e imagens são removidos, e links externos
   abrem em nova aba com `noopener noreferrer nofollow`. Mensagens da pessoa
   continuam como texto puro.
+- Tema claro/escuro automático via `prefers-color-scheme`: branco + indigo
+  no claro, preto + indigo no escuro. Os tokens ficam em
+  `src/estilos/global.css`; ícones, favicon e manifest usam indigo.
 
 ## Fases
 

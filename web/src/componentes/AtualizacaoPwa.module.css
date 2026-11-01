@@ -10,9 +10,9 @@
   width: min(560px, calc(100vw - 28px));
   padding: 13px 16px;
   border-radius: 16px;
-  background: var(--verde-escuro);
-  color: var(--paper-alto);
-  box-shadow: 0 18px 40px rgba(18, 51, 42, 0.28);
+  background: var(--indigo-escuro);
+  color: var(--texto-sobre-indigo);
+  box-shadow: var(--sombra);
   font-size: 14.5px;
 }
 
@@ -28,7 +28,7 @@
 }
 
 .atualizar {
-  border: 1px solid rgba(250, 247, 238, 0.35);
+  border: 1px solid color-mix(in srgb, var(--texto-sobre-indigo) 35%, transparent);
   background: transparent;
   color: inherit;
   font-weight: 650;

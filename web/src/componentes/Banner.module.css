@@ -15,27 +15,27 @@
 }
 
 .erro {
-  background: var(--terracota-claro);
-  border-color: rgba(185, 95, 64, 0.28);
-  color: #6e2f1b;
+  background: var(--perigo-claro);
+  border-color: var(--perigo-borda);
+  color: var(--perigo-texto);
 }
 
 .info {
-  background: var(--verde-lavado);
-  border-color: rgba(30, 75, 61, 0.18);
-  color: var(--verde-escuro);
+  background: var(--indigo-lavado);
+  border-color: var(--indigo-borda);
+  color: var(--indigo-escuro);
 }
 
 .aviso {
-  background: #f7edd7;
-  border-color: rgba(150, 110, 35, 0.24);
-  color: #6b4d13;
+  background: var(--aviso-bg);
+  border-color: var(--aviso-borda);
+  color: var(--aviso-texto);
 }
 
 .sucesso {
-  background: var(--verde-claro);
-  border-color: rgba(30, 75, 61, 0.2);
-  color: var(--verde-escuro);
+  background: var(--sucesso-bg);
+  border-color: var(--sucesso-borda);
+  color: var(--sucesso-texto);
 }
 
 .conteudo {

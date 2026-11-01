@@ -72,7 +72,7 @@
 .markdown blockquote {
   margin: 0.7em 0;
   padding: 0.15em 0 0.15em 0.9em;
-  border-left: 3px solid var(--verde-claro);
+  border-left: 3px solid var(--indigo-claro);
   color: var(--tinta-suave);
 }
 
@@ -106,13 +106,13 @@
 }
 
 .markdown a {
-  color: var(--verde);
+  color: var(--indigo);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .markdown a:hover {
-  color: var(--verde-escuro);
+  color: var(--indigo-escuro);
 }
 
 .markdown hr {

@@ -13,25 +13,17 @@
   gap: 40px;
   padding: clamp(28px, 5vw, 64px);
   background:
-    radial-gradient(
-      circle at 18% 12%,
-      rgba(255, 253, 248, 0.12) 0,
-      rgba(255, 253, 248, 0) 34%
-    ),
-    radial-gradient(
-      circle at 82% 74%,
-      rgba(185, 95, 64, 0.24) 0,
-      rgba(185, 95, 64, 0) 42%
-    ),
-    var(--verde-escuro);
-  color: var(--paper-alto);
+    radial-gradient(circle at 18% 12%, var(--painel-brilho) 0, transparent 34%),
+    radial-gradient(circle at 82% 74%, var(--painel-destaque) 0, transparent 42%),
+    var(--painel);
+  color: var(--painel-texto);
 }
 
 .marca::before,
 .marca::after {
   content: '';
   position: absolute;
-  border: 1px solid rgba(250, 247, 238, 0.14);
+  border: 1px solid var(--painel-linha);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -60,7 +52,7 @@
   font-size: 12px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(250, 247, 238, 0.66);
+  color: var(--painel-texto-fraco);
 }
 
 .frase h1 {
@@ -77,7 +69,7 @@
   max-width: 420px;
   font-size: 17px;
   line-height: 1.6;
-  color: rgba(250, 247, 238, 0.75);
+  color: var(--painel-texto-suave);
 }
 
 .selo {
@@ -87,11 +79,11 @@
   gap: 10px;
   align-self: flex-start;
   padding: 10px 14px;
-  border: 1px solid rgba(250, 247, 238, 0.18);
+  border: 1px solid var(--painel-linha);
   border-radius: 999px;
   font-size: 13px;
-  color: rgba(250, 247, 238, 0.72);
-  background: rgba(250, 247, 238, 0.04);
+  color: var(--painel-texto-suave);
+  background: color-mix(in srgb, var(--painel-texto) 5%, transparent);
 }
 
 .painel {
@@ -136,7 +128,7 @@
 }
 
 .destaque {
-  color: var(--verde-escuro);
+  color: var(--indigo-escuro);
   font-weight: 650;
   overflow-wrap: anywhere;
 }
@@ -154,7 +146,7 @@
   border: 0;
   background: transparent;
   padding: 4px 0;
-  color: var(--verde);
+  color: var(--indigo);
   font-size: 14px;
   font-weight: 600;
   text-decoration: underline;

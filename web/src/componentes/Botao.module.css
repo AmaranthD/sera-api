@@ -23,16 +23,22 @@
 }
 
 .botao:disabled {
-  opacity: 0.55;
+  opacity: 0.65;
+}
+
+.primario:disabled {
+  opacity: 1;
+  background: var(--indigo-claro);
+  color: var(--indigo-escuro);
 }
 
 .primario {
-  background: var(--verde);
-  color: var(--paper-alto);
+  background: var(--indigo);
+  color: var(--texto-sobre-indigo);
 }
 
 .primario:hover:not(:disabled) {
-  background: var(--verde-escuro);
+  background: var(--indigo-escuro);
 }
 
 .secundario {
@@ -42,28 +48,28 @@
 }
 
 .secundario:hover:not(:disabled) {
-  border-color: var(--verde);
-  color: var(--verde);
+  border-color: var(--indigo);
+  color: var(--indigo);
 }
 
 .fantasma {
   background: transparent;
-  color: var(--verde);
+  color: var(--indigo);
   padding-inline: 12px;
 }
 
 .fantasma:hover:not(:disabled) {
-  background: var(--verde-lavado);
+  background: var(--indigo-lavado);
 }
 
 .perigo {
   background: transparent;
-  border-color: rgba(185, 95, 64, 0.35);
-  color: var(--terracota);
+  border-color: var(--perigo-borda);
+  color: var(--perigo);
 }
 
 .perigo:hover:not(:disabled) {
-  background: var(--terracota-claro);
+  background: var(--perigo-claro);
 }
 
 .larguraTotal {

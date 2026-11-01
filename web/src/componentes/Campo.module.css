@@ -31,12 +31,12 @@
 
 .entrada:focus {
   outline: none;
-  border-color: var(--verde);
-  box-shadow: 0 0 0 3px rgba(30, 75, 61, 0.16);
+  border-color: var(--indigo);
+  box-shadow: var(--foco-suave);
 }
 
 .entrada[aria-invalid='true'] {
-  border-color: var(--terracota);
+  border-color: var(--perigo);
 }
 
 .dica {
@@ -46,5 +46,5 @@
 
 .erro {
   font-size: 13.5px;
-  color: var(--terracota);
+  color: var(--perigo);
 }

@@ -2,7 +2,7 @@
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  color: var(--verde-escuro);
+  color: var(--indigo-escuro);
 }
 
 .monograma {
@@ -11,13 +11,14 @@
   width: 44px;
   height: 44px;
   border-radius: 14px;
-  background: var(--verde);
-  color: var(--paper-alto);
+  background: var(--indigo);
+  color: var(--texto-sobre-indigo);
   font-family: var(--fonte-titulo);
   font-size: 26px;
   line-height: 1;
   padding-bottom: 2px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--texto-sobre-indigo) 14%, transparent);
   flex: none;
 }
 
@@ -42,16 +43,16 @@
 }
 
 .clara {
-  color: var(--paper-alto);
+  color: var(--painel-texto);
 }
 
 .clara .monograma {
-  background: var(--paper-alto);
-  color: var(--verde-escuro);
+  background: var(--painel-texto);
+  color: var(--painel);
 }
 
 .clara .legenda {
-  color: rgba(250, 247, 238, 0.66);
+  color: var(--painel-texto-fraco);
 }
 
 .pequena .monograma {

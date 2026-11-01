@@ -121,6 +121,8 @@ O E2E roda `npm run build` + `npm run preview` na porta 4317 (configurado em
 ## PWA
 
 - `vite-plugin-pwa` com `registerType: 'autoUpdate'`.
+- Tema claro/escuro automático pelo sistema (`prefers-color-scheme`):
+  branco + indigo no claro, preto + indigo no escuro. O manifest usa indigo.
 - Precache só do shell; `/chat`, Supabase e `/health` ficam fora do service
   worker.
 - Offline: o shell abre, aparece o banner "sem conexão" e o composer fica

@@ -28,7 +28,7 @@
 }
 
 .voltar:hover {
-  background: rgba(24, 36, 31, 0.05);
+  background: var(--hover);
   color: var(--tinta);
 }
 
@@ -48,7 +48,7 @@
   padding: clamp(22px, 4vw, 34px);
   border-bottom: 1px solid var(--linha);
   background:
-    radial-gradient(circle at 88% 10%, rgba(30, 75, 61, 0.1), rgba(30, 75, 61, 0) 42%),
+    radial-gradient(circle at 88% 10%, var(--brilho-topo), transparent 42%),
     var(--superficie);
 }
 
@@ -59,8 +59,8 @@
   height: 64px;
   flex: none;
   border-radius: 22px;
-  background: var(--verde);
-  color: var(--paper-alto);
+  background: var(--indigo);
+  color: var(--texto-sobre-indigo);
   font-size: 20px;
   font-weight: 750;
   letter-spacing: 0.04em;
@@ -154,11 +154,11 @@
 }
 
 .pontoOk {
-  background: var(--verde);
+  background: var(--indigo);
 }
 
 .pontoFalha {
-  background: var(--terracota);
+  background: var(--perigo);
 }
 
 .pontoEspera {

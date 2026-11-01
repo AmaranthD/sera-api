@@ -60,6 +60,18 @@ test('o botão de conta mostra o perfil', async ({ page }) => {
   await expect(page.getByText('Funcionando')).toBeVisible()
 })
 
+test('respeita o tema escuro do sistema', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.goto('/')
+
+  await expect(page.getByRole('heading', { level: 2, name: /Oi, Maria/ })).toBeVisible()
+
+  const fundo = await page.evaluate(
+    () => getComputedStyle(document.body).backgroundColor,
+  )
+  expect(fundo).toBe('rgb(0, 0, 0)')
+})
+
 test('abre offline com o shell e o composer desabilitado', async ({
   page,
   context,

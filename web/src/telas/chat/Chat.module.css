@@ -73,12 +73,12 @@
 }
 
 .item:hover {
-  background: rgba(24, 36, 31, 0.045);
+  background: var(--hover);
 }
 
 .itemAtivo {
-  background: var(--verde-lavado);
-  box-shadow: inset 3px 0 0 var(--verde);
+  background: var(--indigo-lavado);
+  box-shadow: inset 3px 0 0 var(--indigo);
 }
 
 .itemTitulo {
@@ -108,9 +108,9 @@
   border-radius: 10px;
   background: linear-gradient(
     90deg,
-    rgba(24, 36, 31, 0.05),
-    rgba(24, 36, 31, 0.09),
-    rgba(24, 36, 31, 0.05)
+    var(--esqueleto-1),
+    var(--esqueleto-2),
+    var(--esqueleto-1)
   );
   background-size: 200% 100%;
   animation: brilhar 1.4s linear infinite;
@@ -136,7 +136,7 @@
 }
 
 .pessoa:hover {
-  background: rgba(24, 36, 31, 0.045);
+  background: var(--hover);
 }
 
 .avatar {
@@ -146,8 +146,8 @@
   height: 37px;
   flex: none;
   border-radius: 50%;
-  background: var(--verde-claro);
-  color: var(--verde-escuro);
+  background: var(--indigo-claro);
+  color: var(--indigo-escuro);
   font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.03em;
@@ -180,11 +180,7 @@
   min-width: 0;
   min-height: 0;
   background:
-    radial-gradient(
-      circle at 50% 0,
-      rgba(255, 253, 248, 0.75) 0,
-      rgba(255, 253, 248, 0) 42%
-    ),
+    radial-gradient(circle at 50% 0, var(--brilho-topo) 0, transparent 42%),
     var(--paper);
 }
 
@@ -196,7 +192,7 @@
   gap: 12px;
   padding: 10px 22px;
   border-bottom: 1px solid var(--linha);
-  background: rgba(250, 247, 238, 0.78);
+  background: var(--cabecalho-bg);
   backdrop-filter: blur(10px);
 }
 
@@ -209,11 +205,11 @@
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: var(--verde-escuro);
+  color: var(--indigo-escuro);
 }
 
 .botaoIcone:hover {
-  background: rgba(24, 36, 31, 0.06);
+  background: var(--hover-forte);
 }
 
 .menuMobile {
@@ -326,8 +322,8 @@
 }
 
 .sugestao:hover {
-  border-color: var(--verde);
-  background: var(--verde-lavado);
+  border-color: var(--indigo);
+  background: var(--indigo-lavado);
 }
 
 .assistente {
@@ -345,8 +341,8 @@
   flex: none;
   margin-top: 3px;
   border-radius: 10px;
-  background: var(--verde);
-  color: var(--paper-alto);
+  background: var(--indigo);
+  color: var(--texto-sobre-indigo);
   font-family: var(--fonte-titulo);
   font-size: 18px;
   line-height: 1;
@@ -370,8 +366,8 @@
   max-width: min(80%, 620px);
   padding: 12px 16px;
   border-radius: 17px 17px 5px 17px;
-  background: var(--verde);
-  color: var(--paper-alto);
+  background: var(--indigo);
+  color: var(--texto-sobre-indigo);
 }
 
 .textoMensagem {
@@ -393,7 +389,7 @@
 
 .metaUsuario {
   justify-content: flex-end;
-  color: rgba(250, 247, 238, 0.65);
+  color: var(--texto-sobre-indigo-suave);
 }
 
 .avisoMensagem {
@@ -410,7 +406,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--verde);
+  background: var(--indigo);
   opacity: 0.3;
   animation: aparecer 1.1s ease-in-out infinite;
 }
@@ -429,7 +425,7 @@
   height: 1.05em;
   margin-left: 2px;
   vertical-align: -0.15em;
-  background: var(--terracota);
+  background: var(--indigo);
   animation: piscar 900ms steps(2) infinite;
 }
 
@@ -465,9 +461,9 @@
   border-radius: 16px;
   background: linear-gradient(
     90deg,
-    rgba(24, 36, 31, 0.045),
-    rgba(24, 36, 31, 0.08),
-    rgba(24, 36, 31, 0.045)
+    var(--esqueleto-1),
+    var(--esqueleto-2),
+    var(--esqueleto-1)
   );
   background-size: 200% 100%;
   animation: brilhar 1.4s linear infinite;
@@ -488,11 +484,7 @@
   flex: none;
   padding: 12px 22px max(14px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--linha);
-  background: linear-gradient(
-    to top,
-    rgba(250, 247, 238, 0.96),
-    rgba(250, 247, 238, 0.7)
-  );
+  background: linear-gradient(to top, var(--composer-bg-1), var(--composer-bg-2));
 }
 
 .composer {
@@ -512,8 +504,8 @@
 }
 
 .composer:focus-within {
-  border-color: var(--verde);
-  box-shadow: 0 0 0 3px rgba(30, 75, 61, 0.12);
+  border-color: var(--indigo);
+  box-shadow: var(--foco-suave);
 }
 
 .textarea {
@@ -544,15 +536,15 @@
   flex: none;
   border: 0;
   border-radius: 50%;
-  background: var(--verde);
-  color: var(--paper-alto);
+  background: var(--indigo);
+  color: var(--texto-sobre-indigo);
   transition:
     background-color 150ms ease,
     opacity 150ms ease;
 }
 
 .enviar:hover:not(:disabled) {
-  background: var(--verde-escuro);
+  background: var(--indigo-escuro);
 }
 
 .enviar:disabled {
@@ -561,11 +553,11 @@
 }
 
 .parar {
-  background: var(--terracota);
+  background: var(--perigo);
 }
 
 .parar:hover {
-  background: #9d4a2e;
+  background: var(--perigo-escuro);
 }
 
 .composerRodape {
@@ -602,7 +594,7 @@
 }
 
 .drawer::backdrop {
-  background: rgba(18, 51, 42, 0.38);
+  background: var(--backdrop);
   backdrop-filter: blur(2px);
 }
 
