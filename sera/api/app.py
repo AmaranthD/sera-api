@@ -94,7 +94,7 @@ def criar_app(
             allow_origins=list(config.cors_origins),
             allow_origin_regex=config.cors_origin_regex,
             allow_credentials=False,
-            allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+            allow_methods=["GET", "POST", "DELETE", "PATCH", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type"],
             max_age=600,
         )
