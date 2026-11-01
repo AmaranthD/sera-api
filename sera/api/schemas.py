@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, StringConstraints
 
@@ -63,3 +63,5 @@ class ChatEntrada(BaseModel):
     mensagem: Mensagem
     conversa_id: str | None = None
     stream: bool = True
+    # "jw" liga o modo de fonte única: só Bíblia/publicações JW respondem.
+    fonte: Literal["jw"] | None = None

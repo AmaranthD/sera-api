@@ -81,6 +81,25 @@ describe('converterEvento', () => {
     expect(converterEvento({ evento: 'ping', dados: {} })).toBeNull()
   })
 
+  it('converte sources, deduplica e descarta URL inválida', () => {
+    expect(
+      converterEvento({
+        evento: 'sources',
+        dados: {
+          fontes: [
+            { titulo: 'JW · Bíblia', url: 'https://www.jw.org/finder?bible=1' },
+            { titulo: 'duplicada', url: 'https://www.jw.org/finder?bible=1' },
+            { url: 'javascript:alert(1)' },
+            { titulo: 'sem url' },
+          ],
+        },
+      }),
+    ).toEqual({
+      tipo: 'sources',
+      fontes: [{ titulo: 'JW · Bíblia', url: 'https://www.jw.org/finder?bible=1' }],
+    })
+  })
+
   it('recusa start sem ids', () => {
     expect(() =>
       converterEvento({ evento: 'start', dados: { conversa_id: 'c1' } }),
@@ -196,6 +215,26 @@ describe('transmitirChat', () => {
       mensagem: 'Oi',
       conversa_id: 'c1',
       stream: true,
+    })
+  })
+
+  it('envia a fonte jw no corpo quando o modo está ligado', async () => {
+    let corpo: unknown = null
+    servidor.use(
+      mswHttp.post('https://api.test/chat', async ({ request }) => {
+        corpo = await request.json()
+        return HttpResponse.text(SSE_COMPLETO, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      }),
+    )
+
+    await transmitirChat(cliente(), { mensagem: 'Salmo 23', fonte: 'jw' }, () => {})
+
+    expect(corpo).toEqual({
+      mensagem: 'Salmo 23',
+      stream: true,
+      fonte: 'jw',
     })
   })
 })

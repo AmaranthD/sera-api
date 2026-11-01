@@ -35,6 +35,7 @@ export function ChatTela() {
 
   const [drawerAberto, setDrawerAberto] = useState(false)
   const [rascunho, setRascunho] = useState('')
+  const [modoJw, setModoJw] = useState(false)
 
   useEffect(() => {
     const aoVoltar = () => {
@@ -54,7 +55,7 @@ export function ChatTela() {
   const enviarTexto = (texto: string) => {
     if (!online || ocupado) return
     setRascunho('')
-    void enviar(texto)
+    void enviar(texto, modoJw ? { fonte: 'jw' } : undefined)
   }
 
   const sugerir = (texto: string) => {
@@ -145,6 +146,8 @@ export function ChatTela() {
           aoParar={parar}
           ocupado={ocupado}
           online={online}
+          modoJw={modoJw}
+          aoAlternarJw={() => setModoJw((atual) => !atual)}
           aviso={<AvisoAcordando ativo={status === 'enviando'} />}
         />
       </main>

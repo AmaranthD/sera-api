@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { ehSessaoExpirada, ErroApi } from '../api/erros'
 import { aquecerApi } from '../api/aquecimento'
 import type { EventoChat } from '../dominios/tipos'
-import type { Conversa, Mensagem } from '../dominios/tipos'
+import type { Conversa, Fonte, Mensagem } from '../dominios/tipos'
 import { normalizarMensagem } from '../dominios/texto'
 import { useSessao } from '../auth/contexto'
 import { usePessoa } from '../pessoa/contexto'
@@ -30,6 +30,14 @@ function semAcentoDeErro(erro: unknown): string {
   if (erro instanceof ErroApi) return erro.message
   if (erro instanceof Error) return erro.message
   return 'Não foi possível completar o pedido.'
+}
+
+function juntarFontes(atuais: Fonte[] | undefined, novas: Fonte[]): Fonte[] {
+  const porUrl = new Map<string, Fonte>()
+  for (const fonte of [...(atuais ?? []), ...novas]) {
+    porUrl.set(fonte.url, fonte)
+  }
+  return [...porUrl.values()]
 }
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
@@ -137,11 +145,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const enviar = useCallback(
-    async (bruto: string) => {
+    async (bruto: string, opcoes?: { fonte?: 'jw' }) => {
       if (emStreamRef.current) return
       const texto = normalizarMensagem(bruto)
       if (!texto) return
 
+      const fonte = opcoes?.fonte
       const idConversa = conversaIdRef.current
       const agora = new Date().toISOString()
       const idUsuario = idLocal()
@@ -234,6 +243,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
+        if (evento.tipo === 'sources') {
+          setMensagens((atuais) =>
+            atuais.map((mensagem) =>
+              mensagem.id === idAssistente
+                ? {
+                    ...mensagem,
+                    fontes: juntarFontes(mensagem.fontes, evento.fontes),
+                  }
+                : mensagem,
+            ),
+          )
+          return
+        }
+
         if (evento.tipo === 'done') {
           marcarAssistente({ id: evento.mensagemId, status: 'completa' })
           setMensagens((atuais) =>
@@ -259,7 +282,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       try {
         await api.transmitirChat(
-          { mensagem: texto, conversaId: idConversa ?? undefined },
+          { mensagem: texto, conversaId: idConversa ?? undefined, fonte },
           aoEvento,
           controlador.signal,
         )

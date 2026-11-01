@@ -11,6 +11,8 @@ function montar(extra: Partial<Parameters<typeof Composer>[0]> = {}) {
     aoParar: vi.fn(),
     ocupado: false,
     online: true,
+    modoJw: false,
+    aoAlternarJw: vi.fn(),
     ...extra,
   }
   render(<Composer {...props} />)
@@ -62,5 +64,33 @@ describe('Composer', () => {
   it('mostra o contador perto do limite', () => {
     montar({ valor: 'a'.repeat(7001) })
     expect(screen.getByText('7001/8000')).toBeInTheDocument()
+  })
+})
+
+describe('Composer no modo JW', () => {
+  it('alterna o modo pelo botão JW', async () => {
+    const { props, usuario } = montar()
+    const botao = screen.getByRole('button', { name: 'Ativar modo JW' })
+    expect(botao).toHaveAttribute('aria-pressed', 'false')
+
+    await usuario.click(botao)
+    expect(props.aoAlternarJw).toHaveBeenCalledTimes(1)
+  })
+
+  it('mostra o estado ativo e o aviso no rodapé', () => {
+    montar({ modoJw: true })
+    expect(screen.getByRole('button', { name: 'Desativar modo JW' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByText('Modo JW · só Bíblia e publicações JW')).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText('Pergunte sobre a Bíblia ou publicações JW…'),
+    ).toBeInTheDocument()
+  })
+
+  it('desabilita o botão JW sem conexão', () => {
+    montar({ online: false })
+    expect(screen.getByRole('button', { name: 'Ativar modo JW' })).toBeDisabled()
   })
 })

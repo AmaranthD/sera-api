@@ -38,7 +38,10 @@ Gere as chaves com:
 openssl rand -hex 32
 ```
 
-## Opção 1 — Hugging Face Space (recomendada para grátis)
+## Opção 1 — Hugging Face Space (grátis quando disponível)
+
+> Em 2026 o Docker Space pode exigir plano pago dependendo da conta. Se for
+> o caso, use a opção 3 (Render), que já vem no `render.yaml` do repositório.
 
 1. Crie um **Space** novo em [huggingface.co/new-space](https://huggingface.co/new-space):
    - SDK: **Docker**
@@ -86,10 +89,22 @@ openssl rand -hex 32
      `MCP_AUTH=true`, `AUTH_STORE_PATH=/tmp/jw-mcp-auth.json`
 6. Health check: `/health`.
 
+## Opção 3 — Render free (junto da Sera)
+
+O `render.yaml` do repositório já declara o `sera-jw`. Passo a passo em
+`docs/deploy-render.md` (seção "Serviço JW"). Resumo:
+
+1. Build: `jw-mcp/Dockerfile`, contexto `jw-mcp`, health `/health`.
+2. Variáveis: `MCP_BASE_URL` (URL final, sem `/mcp`),
+   `MCP_AUTH_SECRET`, `JW_API_KEY`, `MCP_TRUST_PROXY=true`,
+   `MCP_AUTH=true`, `AUTH_STORE_PATH=/tmp/jw-mcp-auth.json`.
+3. No `sera-api`, aponte `JW_API_URL=https://<sera-jw>.onrender.com/api` e
+   repita o `JW_API_KEY`.
+4. Os dois serviços free dividem 750 h/mês e dormem após 15 min sem tráfego.
+
 ## Ligar na Sera (Render)
 
 No serviço `sera-api`, em **Environment**, adicione:
-
 ```env
 JW_API_URL=https://<seu-servico-jw>/api
 JW_API_KEY=<a mesma JW_API_KEY>

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from difflib import SequenceMatcher
 from typing import Any, Mapping, Sequence
+from urllib.parse import urlparse
 
 from ..prompt import (
     AjusteAprendido,
@@ -139,7 +140,9 @@ ESQUEMA_JW = {
             "Consulta a Bíblia e publicações das Testemunhas de Jeová: "
             "versículos, notas de estudo, apostila (CLM), A Sentinela e "
             "legendas de vídeos. Use quando a pessoa pedir conteúdo bíblico "
-            "ou de estudo."
+            "ou de estudo. No modo JW esta é a única fonte: se não houver "
+            "ferramenta para o tema exato, escolha o relato ou versículo "
+            "mais próximo e busque o texto real antes de responder."
         ),
         "parameters": {
             "type": "object",
@@ -262,6 +265,29 @@ Você pode consultar a Bíblia e publicações com a ferramenta `jw`.
 - Não invente texto bíblico nem conteúdo de publicação. Se a ferramenta não
   trouxer, diga que não encontrou.
 - Cite a URL quando o resultado tiver uma.
+"""
+
+INSTRUCAO_JW_MODO = """\
+## Modo JW (fonte única)
+
+A pessoa ativou o modo JW nesta resposta. A única fonte de verdade é a
+ferramenta `jw`.
+
+- Consulte a ferramenta `jw` antes de responder qualquer coisa sobre Bíblia,
+  estudo, apostila (CLM), A Sentinela ou vídeos. Se a pessoa escrever
+  "pesquise", "busque", "procure" ou "consulte", a pesquisa é nas
+  publicações JW — não na internet.
+- Não use a busca na internet nem responda de memória citando texto bíblico
+  ou de publicação. Se a ferramenta não devolver o texto, diga que não
+  encontrou em vez de completar por conta própria.
+- Se o tema exato não existir no material consultado, traga o relato,
+  princípio ou cenário mais próximo do que a ferramenta devolveu e deixe
+  claro que é o mais próximo encontrado, não o tema exato.
+- Sempre que citar um versículo, chame também `get_bible_verse_url` para
+  obter o link do texto em jw.org.
+- Termine sempre com uma seção `## Fontes` com um link Markdown para cada
+  página ou arquivo consultado. Repita apenas os links que apareceram nos
+  resultados da ferramenta.
 """
 
 INSTRUCAO_MEMORIA = """\
@@ -838,3 +864,45 @@ def bloco_resultados(
         linhas.append("")
     linhas.append("<<<FIM DOS RESULTADOS>>>")
     return "\n".join(linhas)
+
+
+_URL_REGEX = re.compile(r"https?://[^\s<>\"'()\[\]{}]+")
+_HOSTS_JW = ("jw.org", "jw-cdn.org")
+_MAX_FONTES_JW = 8
+
+_TITULO_FONTE_JW = {
+    "search_bible_books": "JW · livros da Bíblia",
+    "get_bible_verse": "JW · versículo",
+    "get_verse_with_study": "JW · versículo com notas de estudo",
+    "get_bible_verse_url": "JW · Bíblia",
+    "getWorkbookLinks": "JW · apostila (CLM)",
+    "getWorkbookContent": "JW · apostila (CLM)",
+    "getWatchtowerLinks": "JW · A Sentinela",
+    "getWatchtowerContent": "JW · A Sentinela",
+    "get_jw_captions": "JW · legendas de vídeo",
+}
+
+
+def extrair_urls_jw(texto: str) -> list[str]:
+    """URLs de jw.org/jw-cdn.org citadas no retorno de uma ferramenta JW."""
+    urls: list[str] = []
+    for bruto in _URL_REGEX.findall(texto or ""):
+        url = bruto.rstrip(".,;:!?")
+        try:
+            host = (urlparse(url).hostname or "").lower()
+        except ValueError:
+            continue
+        if not any(
+            host == host_jw or host.endswith(f".{host_jw}")
+            for host_jw in _HOSTS_JW
+        ):
+            continue
+        if url not in urls:
+            urls.append(url)
+        if len(urls) >= _MAX_FONTES_JW:
+            break
+    return urls
+
+
+def titulo_fonte_jw(ferramenta: str) -> str:
+    return _TITULO_FONTE_JW.get(ferramenta, "JW")

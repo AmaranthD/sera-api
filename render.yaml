@@ -47,7 +47,6 @@ services:
         value: "600"
       - key: BUSCA_PAIS
         value: BR
-        value: pt
       - key: BUSCA_MAX_RODADAS
         value: "1"
       - key: TAVILY_API_KEY
@@ -68,3 +67,33 @@ services:
       # impedir que qualquer conta autenticada use a API.
       # - key: SERA_EMAILS
       #   sync: false
+
+  # Serviço JW (Bíblia e publicações). Fica no mesmo workspace e divide as
+  # 750 h/mês dos serviços free: os dois dormem após 15 min sem tráfego, e
+  # dormindo não consomem horas. Não coloque keep-alive nos dois.
+  #
+  # Depois do primeiro deploy, copie a URL pública (ex.:
+  # https://sera-jw-xxxx.onrender.com) para MCP_BASE_URL e para JW_API_URL
+  # do sera-api (acrescentando /api no fim).
+  - type: web
+    name: sera-jw
+    runtime: docker
+    plan: free
+    region: virginia
+    dockerfilePath: ./jw-mcp/Dockerfile
+    dockerContext: ./jw-mcp
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: MCP_BASE_URL
+        sync: false
+      - key: MCP_AUTH_SECRET
+        sync: false
+      - key: JW_API_KEY
+        sync: false
+      - key: MCP_TRUST_PROXY
+        value: "true"
+      - key: MCP_AUTH
+        value: "true"
+      - key: AUTH_STORE_PATH
+        value: /tmp/jw-mcp-auth.json

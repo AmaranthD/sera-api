@@ -37,6 +37,7 @@ from .db_supabase import Conflito
 from .ferramentas import (
     INSTRUCAO_BUSCA,
     INSTRUCAO_JW,
+    INSTRUCAO_JW_MODO,
     INSTRUCAO_MEMORIA,
     NOME_AJUSTAR,
     NOME_ESQUECER,
@@ -51,6 +52,8 @@ from .ferramentas import (
     consulta_explicita,
     esquemas,
     executar_ferramenta,
+    extrair_urls_jw,
+    titulo_fonte_jw,
 )
 from .jw import JWIndisponivel
 from .llm import (
@@ -491,6 +494,13 @@ async def chat(
     if linha_pessoa is None:
         raise HTTPException(status_code=404, detail="pessoa não encontrada")
 
+    modo_jw = corpo.fonte == "jw"
+    if modo_jw and not (config.jw_ativa and config.llm_provider == "openai"):
+        raise HTTPException(
+            status_code=503,
+            detail="o modo JW não está disponível neste servidor",
+        )
+
     if corpo.conversa_id is not None:
         conversa = await banco.obter_conversa(corpo.conversa_id)
         if conversa is None or conversa["pessoa_id"] != pessoa_id:
@@ -514,7 +524,7 @@ async def chat(
         personality, linha_pessoa, banco, config, corpo.mensagem, momento
     )
     busca, ferramentas, fontes, system = await _preparar_ferramentas(
-        request, config, corpo.mensagem, system, momento
+        request, config, corpo.mensagem, system, momento, modo_jw=modo_jw
     )
     contexto = ContextoFerramentas(
         busca=busca,
@@ -571,14 +581,17 @@ async def _preparar_ferramentas(
     mensagem: str,
     system: str,
     momento: datetime,
+    *,
+    modo_jw: bool = False,
 ) -> tuple[ClienteTavily | None, list[dict] | None, list[dict], str]:
     """Liga busca e aprendizado e, no pedido explícito, já busca antes.
 
     "Pesquise X" é interpretado como busca na internet sem depender de o
-    modelo decidir chamar a ferramenta.
+    modelo decidir chamar a ferramenta. No modo JW a internet fica desligada
+    e a única fonte é o serviço JW.
     """
     busca: ClienteTavily | None = getattr(request.app.state, "busca", None)
-    if not config.busca_ativa:
+    if not config.busca_ativa or modo_jw:
         busca = None
 
     # O cliente Gemini desta camada ainda não executa tool calling.
@@ -590,6 +603,10 @@ async def _preparar_ferramentas(
         aprendizado=aprendizado,
         jw=jw,
     )
+    if jw:
+        system = f"{system}\n\n{INSTRUCAO_JW}"
+    if modo_jw:
+        system = f"{system}\n\n{INSTRUCAO_JW_MODO}"
     if not ferramentas and busca is None:
         return None, None, [], system
 
@@ -621,8 +638,6 @@ async def _preparar_ferramentas(
 
     if aprendizado:
         system = f"{system}\n\n{INSTRUCAO_MEMORIA}"
-    if jw:
-        system = f"{system}\n\n{INSTRUCAO_JW}"
 
     return busca, ferramentas or None, fontes, system
 
@@ -903,6 +918,7 @@ async def _executar_chamadas(
                     fontes.append(item)
         elif chamada.nome == NOME_JW:
             texto = str(resultado.get("texto") or "").strip()
+            ferramenta_jw = str(resultado.get("ferramenta") or "jw")
             if resultado.get("erro"):
                 blocos.append(
                     "## Conteúdo JW\n"
@@ -915,6 +931,16 @@ async def _executar_chamadas(
                     "Use apenas este conteúdo para responder e cite a URL "
                     "quando houver."
                 )
+                for url in extrair_urls_jw(texto):
+                    if url in vistos:
+                        continue
+                    vistos.add(url)
+                    fontes.append(
+                        {
+                            "titulo": titulo_fonte_jw(ferramenta_jw),
+                            "url": url,
+                        }
+                    )
         else:
             notas.append(_nota_de_ferramenta(chamada.nome, resultado))
 

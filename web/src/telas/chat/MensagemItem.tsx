@@ -1,6 +1,7 @@
 import type { Mensagem } from '../../dominios/tipos'
 import { formatarHora } from '../../dominios/texto'
 import estilos from './Chat.module.css'
+import { ListaFontes } from './ListaFontes'
 import { MensagemMarkdown } from './MensagemMarkdown'
 
 interface Props {
@@ -56,6 +57,7 @@ export function MensagemItem({ mensagem, transcrevendo }: Props) {
               {transcrevendo && !vazia ? (
                 <span className={estilos.cursor} aria-hidden="true" />
               ) : null}
+              {!transcrevendo ? <ListaFontes fontes={mensagem.fontes} /> : null}
             </>
           )}
         </div>

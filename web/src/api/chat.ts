@@ -1,9 +1,9 @@
-import type { EntradaChat, EventoChat, UsoLLM } from '../dominios/tipos'
+import type { EntradaChat, EventoChat, Fonte, UsoLLM } from '../dominios/tipos'
 import { ErroApi } from './erros'
 import type { ClienteHttp } from './http'
 import { ErroProtocoloSse, lerEventosSse, type EventoSse } from './sse'
 
-const CONHECIDOS = new Set(['start', 'token', 'done', 'error'])
+const CONHECIDOS = new Set(['start', 'token', 'done', 'error', 'sources'])
 
 function texto(dados: Record<string, unknown>, chave: string): string {
   const valor = dados[chave]
@@ -11,6 +11,32 @@ function texto(dados: Record<string, unknown>, chave: string): string {
     throw new ErroProtocoloSse(`Evento sem o campo "${chave}".`)
   }
   return valor
+}
+
+function listaDeFontes(dados: Record<string, unknown>): Fonte[] {
+  const bruto = dados.fontes
+  if (!Array.isArray(bruto)) return []
+  const vistas = new Set<string>()
+  const fontes: Fonte[] = []
+  for (const item of bruto) {
+    if (!item || typeof item !== 'object') continue
+    const registro = item as Record<string, unknown>
+    const url = typeof registro.url === 'string' ? registro.url.trim() : ''
+    if (!/^https?:\/\//i.test(url) || vistas.has(url)) continue
+    vistas.add(url)
+    const fonte: Fonte = { url }
+    if (typeof registro.titulo === 'string' && registro.titulo) {
+      fonte.titulo = registro.titulo
+    }
+    if (typeof registro.trecho === 'string' && registro.trecho) {
+      fonte.trecho = registro.trecho
+    }
+    if (typeof registro.data === 'string' && registro.data) {
+      fonte.data = registro.data
+    }
+    fontes.push(fonte)
+  }
+  return fontes
 }
 
 /** Converte o evento cru do SSE no contrato tipado do app. */
@@ -34,6 +60,8 @@ export function converterEvento(evento: EventoSse): EventoChat | null {
         tipo: 'token',
         texto: typeof dados.texto === 'string' ? dados.texto : '',
       }
+    case 'sources':
+      return { tipo: 'sources', fontes: listaDeFontes(dados) }
     case 'done':
       return {
         tipo: 'done',
@@ -68,6 +96,7 @@ export async function transmitirChat(
       mensagem: entrada.mensagem,
       conversa_id: entrada.conversaId,
       stream: true,
+      ...(entrada.fonte ? { fonte: entrada.fonte } : {}),
     },
     sinal,
   })

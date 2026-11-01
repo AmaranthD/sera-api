@@ -102,6 +102,43 @@ Passos:
 > serviço no dashboard. A variável `VITE_API_URL` do Pages precisa ser
 > exatamente essa URL.
 
+### Serviço JW (`sera-jw`)
+
+O mesmo `render.yaml` declara um segundo web service free, `sera-jw`, que
+sobe apenas `jw-mcp/Dockerfile` (porta 7860, health `/health`). Ele usa o
+mesmo workspace e as mesmas 750 h/mês; como os dois dormem após 15 min sem
+tráfego, o uso familiar cabe na cota. Não coloque keep-alive nos dois.
+
+1. Aplique o Blueprint (`New → Blueprint` ou **Sync** no serviço existente).
+2. Preencha os segredos do `sera-jw`:
+   - `MCP_AUTH_SECRET`: `openssl rand -hex 32`
+   - `JW_API_KEY`: `openssl rand -hex 32`
+   - `MCP_BASE_URL`: deixe vazio no primeiro deploy (a URL só existe depois).
+3. Copie a URL pública do `sera-jw` (ex.
+   `https://sera-jw-xxxx.onrender.com`) e use nos dois lugares:
+   - no `sera-jw`: `MCP_BASE_URL=https://sera-jw-xxxx.onrender.com`
+     (sem `/mcp` e sem barra no fim);
+   - no `sera-api`: `JW_API_URL=https://sera-jw-xxxx.onrender.com/api` e
+     `JW_API_KEY` com o **mesmo** valor do serviço JW.
+4. Salve e espere o redeploy dos dois. Sem `MCP_BASE_URL` o `start.js` do
+   JW encerra de propósito.
+
+Verificação:
+
+```bash
+curl https://sera-jw-xxxx.onrender.com/health
+# {"status":"ok"}
+
+curl -X POST https://sera-jw-xxxx.onrender.com/api/tool \
+  -H "X-API-Key: $JW_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"nome":"search_bible_books","argumentos":{"query":"matthew"}}'
+```
+
+No PWA, o botão **JW** no composer liga o modo de fonte única: a API desliga
+a busca na internet, usa apenas as ferramentas JW, aceita "pesquise" como
+pesquisa nas publicações e sempre devolve a lista de fontes no fim.
+
 ### Modelo do LLM
 
 O `LLM_MODEL` vem do ambiente e pode ser trocado no dashboard sem alterar o

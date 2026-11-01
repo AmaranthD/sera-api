@@ -30,6 +30,14 @@ export interface Mensagem {
   conteudo: string
   status: StatusMensagem
   criada_em: string
+  fontes?: Fonte[]
+}
+
+export interface Fonte {
+  titulo?: string
+  url: string
+  trecho?: string
+  data?: string
 }
 
 export interface UsoLLM {
@@ -96,11 +104,13 @@ export interface EntradaPessoa {
 export interface EntradaChat {
   mensagem: string
   conversaId?: string
+  fonte?: 'jw'
 }
 
 export type EventoChat =
   | { tipo: 'start'; conversaId: string; mensagemId: string }
   | { tipo: 'token'; texto: string }
+  | { tipo: 'sources'; fontes: Fonte[] }
   | {
       tipo: 'done'
       conversaId: string

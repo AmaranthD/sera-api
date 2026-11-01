@@ -99,3 +99,55 @@ describe('MensagemItem', () => {
     expect(screen.getByText('**oi**')).toBeInTheDocument()
   })
 })
+
+describe('MensagemItem com fontes', () => {
+  const URL_BIBLIA = 'https://www.jw.org/finder?wtlocale=E&bible=19123001'
+  const FONTES = [
+    {
+      titulo: 'JW · Bíblia',
+      url: URL_BIBLIA,
+    },
+    {
+      titulo: 'JW · A Sentinela',
+      url: 'https://cfp2.jw-cdn.org/a/exemplo.rtf',
+    },
+  ]
+
+  it('mostra a lista de fontes depois do texto', () => {
+    render(
+      <MensagemItem
+        mensagem={mensagem({ conteudo: 'O Senhor é meu pastor.', fontes: FONTES })}
+        transcrevendo={false}
+      />,
+    )
+
+    expect(screen.getByRole('heading', { name: 'Fontes' })).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: 'JW · Bíblia' })
+    expect(link).toHaveAttribute('href', URL_BIBLIA)
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer nofollow')
+    expect(screen.getByRole('link', { name: 'JW · A Sentinela' })).toBeInTheDocument()
+  })
+
+  it('não mostra fontes enquanto a resposta está sendo escrita', () => {
+    render(
+      <MensagemItem
+        mensagem={mensagem({ conteudo: 'O Senhor é', fontes: FONTES })}
+        transcrevendo
+      />,
+    )
+    expect(screen.queryByRole('heading', { name: 'Fontes' })).not.toBeInTheDocument()
+  })
+
+  it('não renderiza URL que não seja http(s)', () => {
+    render(
+      <MensagemItem
+        mensagem={mensagem({
+          fontes: [{ titulo: 'Perigo', url: 'javascript:alert(1)' }],
+        })}
+        transcrevendo={false}
+      />,
+    )
+    expect(screen.queryByRole('heading', { name: 'Fontes' })).not.toBeInTheDocument()
+  })
+})

@@ -7,7 +7,10 @@ from sera.api.ferramentas import (
     bloco_resultados,
     consulta_esquecimento,
     consulta_explicita,
+    esquemas,
     executar_ferramenta,
+    extrair_urls_jw,
+    titulo_fonte_jw,
 )
 
 pytestmark = pytest.mark.anyio
@@ -100,3 +103,38 @@ def test_bloco_resultados_delimita_conteudo_nao_confiavel():
 )
 def test_consulta_esquecimento(mensagem, esperado):
     assert consulta_esquecimento(mensagem) == esperado
+
+
+def test_extrair_urls_jw_so_aceita_dominios_jw():
+    texto = (
+        '{"articles": [{"url": "https://cfp2.jw-cdn.org/a/abc.rtf"}, '
+        '{"url": "https://www.jw.org/finder?bible=19123001"}], '
+        '"fonte": "https://exemplo.com/nao-vale"}'
+    )
+    assert extrair_urls_jw(texto) == [
+        "https://cfp2.jw-cdn.org/a/abc.rtf",
+        "https://www.jw.org/finder?bible=19123001",
+    ]
+
+
+def test_extrair_urls_jw_deduplica_e_limita():
+    texto = " ".join(
+        f"https://www.jw.org/pagina?n={indice}" for indice in range(12)
+    )
+    urls = extrair_urls_jw(texto)
+    assert len(urls) == 8
+    assert len(set(urls)) == 8
+    assert extrair_urls_jw("https://www.jw.org/a).") == ["https://www.jw.org/a"]
+
+
+def test_titulo_fonte_jw():
+    assert titulo_fonte_jw("get_verse_with_study").startswith("JW · versículo")
+    assert titulo_fonte_jw("desconhecida") == "JW"
+
+
+def test_esquemas_modo_jw_inclui_jw_e_memoria():
+    nomes = {
+        item["function"]["name"]
+        for item in esquemas(busca=False, aprendizado=True, jw=True)
+    }
+    assert nomes == {"jw", "lembrar", "ajustar_preferencia", "esquecer"}

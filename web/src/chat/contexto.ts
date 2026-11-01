@@ -13,7 +13,7 @@ export interface ValorChat {
   carregandoConversas: boolean
   carregandoMensagens: boolean
   podeReenviar: boolean
-  enviar: (texto: string) => Promise<void>
+  enviar: (texto: string, opcoes?: { fonte?: 'jw' }) => Promise<void>
   parar: () => void
   reenviar: () => void
   novaConversa: () => void

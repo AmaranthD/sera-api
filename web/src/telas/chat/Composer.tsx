@@ -10,6 +10,8 @@ interface Props {
   aoParar: () => void
   ocupado: boolean
   online: boolean
+  modoJw: boolean
+  aoAlternarJw: () => void
   aviso?: ReactNode
 }
 
@@ -20,6 +22,8 @@ export function Composer({
   aoParar,
   ocupado,
   online,
+  modoJw,
+  aoAlternarJw,
   aviso,
 }: Props) {
   const referencia = useRef<HTMLTextAreaElement>(null)
@@ -58,7 +62,11 @@ export function Composer({
           rows={1}
           maxLength={LIMITE_MENSAGEM}
           placeholder={
-            online ? 'Escreva para a Sera…' : 'Sem conexão. Sua mensagem fica aqui.'
+            !online
+              ? 'Sem conexão. Sua mensagem fica aqui.'
+              : modoJw
+                ? 'Pergunte sobre a Bíblia ou publicações JW…'
+                : 'Escreva para a Sera…'
           }
           value={valor}
           disabled={!online || ocupado}
@@ -74,6 +82,21 @@ export function Composer({
             }
           }}
         />
+        <button
+          type="button"
+          className={`${estilos.modoJw} ${modoJw ? estilos.modoJwAtivo : ''}`}
+          aria-pressed={modoJw}
+          aria-label={modoJw ? 'Desativar modo JW' : 'Ativar modo JW'}
+          title={
+            modoJw
+              ? 'Modo JW ativo: a resposta usa só Bíblia e publicações JW'
+              : 'Modo JW: a resposta usa só Bíblia e publicações JW'
+          }
+          disabled={!online || ocupado}
+          onClick={aoAlternarJw}
+        >
+          JW
+        </button>
         {ocupado ? (
           <button
             type="button"
@@ -98,9 +121,11 @@ export function Composer({
       </form>
       <div className={estilos.composerRodape}>
         <span>
-          {online
-            ? 'Enter envia · Shift + Enter quebra a linha'
-            : 'Sem conexão para enviar.'}
+          {!online
+            ? 'Sem conexão para enviar.'
+            : modoJw
+              ? 'Modo JW · só Bíblia e publicações JW'
+              : 'Enter envia · Shift + Enter quebra a linha'}
         </span>
         {valor.length > 7000 ? (
           <span className={estilos.contador}>
