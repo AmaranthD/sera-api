@@ -1,6 +1,7 @@
 import type { Mensagem } from '../../dominios/tipos'
 import { formatarHora } from '../../dominios/texto'
 import estilos from './Chat.module.css'
+import { MensagemMarkdown } from './MensagemMarkdown'
 
 interface Props {
   mensagem: Mensagem
@@ -50,12 +51,12 @@ export function MensagemItem({ mensagem, transcrevendo }: Props) {
               <span className={estilos.ponto} />
             </span>
           ) : (
-            <p className={estilos.textoMensagem}>
-              {mensagem.conteudo}
+            <>
+              <MensagemMarkdown texto={mensagem.conteudo} />
               {transcrevendo && !vazia ? (
                 <span className={estilos.cursor} aria-hidden="true" />
               ) : null}
-            </p>
+            </>
           )}
         </div>
         <div className={estilos.meta}>

@@ -1,7 +1,7 @@
 # Planejamento — front (PWA) no Cloudflare Pages conectado à API
 
 > **Status em 2026-10-31:** fases 0 a 3 implementadas em `web/` e verificadas
-> com lint, typecheck, 65 testes unitários/componente, 6 E2E e build de
+> com lint, typecheck, 68 testes unitários/componente, 6 E2E e build de
 > produção. O que depende de conta externa — criar o projeto no Cloudflare
 > Pages, configurar Redirect URLs de produção e rodar a matriz manual de
 > aparelhos — continua pendente e está marcado nas fases. Decisões fechadas:
@@ -29,8 +29,8 @@ primeiro login ao histórico recarregado, sem instrução técnica.
 
 - Telas de memória, temas silenciados e botões de estilo (Fase 4).
 - Editar/apagar conversa e renomear título pela interface.
-- Markdown rico nas respostas; o MVP renderiza texto puro com quebras
-  preservadas.
+- HTML bruto e imagens externas nas respostas; o Markdown é renderizado com
+  sanitização, sem `dangerouslySetInnerHTML`.
 - Funcionar offline para **enviar** ou **ler histórico**.
 - Analytics, push notification, app nativo, multiusuário público.
 - Pages Functions como proxy; o navegador fala direto com o Render.
@@ -459,7 +459,7 @@ automático nos dois. Ao trocar para domínio próprio:
 | A11y | axe (no Playwright ou Vitest) | login, onboarding e chat sem violações sérias; navegação só por teclado |
 | Manual | matriz de dispositivos | iOS Safari (PWA), Android Chrome, desktop; 3G lento; cold start do Render; link mágico com SW ativo |
 
-- Arena de testes implementada: 65 testes Vitest (parser, HTTP, contrato,
+- Arena de testes implementada: 68 testes Vitest (parser, HTTP, contrato,
   domínio, login, onboarding e componentes) e 6 E2E Playwright com Supabase
   falso. A matriz de dispositivo e o axe automatizado continuam
   manuais/pendentes.
@@ -494,6 +494,10 @@ automático nos dois. Ao trocar para domínio próprio:
   throttle de 5 min. Dispara ao criar uma conversa nova e quando o app volta
   a ficar visível; o boot já aquece via `GET /pessoas`. Não bloqueia a UI e
   não substitui o aviso "acordando" se o cold start ainda estiver em curso.
+- Respostas da Sera renderizam Markdown com `react-markdown` + GFM +
+  `rehype-sanitize`; HTML bruto e imagens são removidos, e links externos
+  abrem em nova aba com `noopener noreferrer nofollow`. Mensagens da pessoa
+  continuam como texto puro.
 
 ## Fases
 
@@ -593,7 +597,7 @@ produção e o link mágico cai na origem certa.
 |---|---|
 | Domínio e nome do projeto Pages | `app.<dominio>` / projeto `sera-conversa` (o subdomínio `sera.pages.dev` já está em uso) |
 | Ícone/logo | decidido: monograma "S" em `public/favicon.svg`, PNGs gerados por `npm run icones` |
-| Markdown nas respostas | adiar; se entrar, `react-markdown` + `rehype-sanitize` e CSP revisada |
+| Markdown nas respostas | implementado com `react-markdown` + `remark-gfm` + `rehype-sanitize`; HTML bruto e imagens ficam de fora |
 | Cache offline de histórico | não no MVP; se pedirem, opt-in com IndexedDB + botão "limpar dados neste dispositivo" |
 | Renomear/apagar conversa | Fase 4, junto de G4 |
 | Editar perfil | Fase 4, junto de G3 e `PATCH` no CORS |
