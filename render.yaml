@@ -35,6 +35,23 @@ services:
         value: "3"
       - key: SERA_MAX_CHARS_CONTEXTO
         value: "6000"
+      - key: BUSCA_HABILITADA
+        value: "true"
+      - key: BUSCA_PROVEDOR
+        value: tavily
+      - key: BUSCA_MAX_RESULTADOS
+        value: "5"
+      - key: BUSCA_TIMEOUT
+        value: "15"
+      - key: BUSCA_CACHE_TTL
+        value: "600"
+      - key: BUSCA_PAIS
+        value: BR
+        value: pt
+      - key: BUSCA_MAX_RODADAS
+        value: "1"
+      - key: TAVILY_API_KEY
+        sync: false
       # Opcional: lista fechada de e-mails. Descomente e preencha para
       # impedir que qualquer conta autenticada use a API.
       # - key: SERA_EMAILS

@@ -3,7 +3,33 @@ from __future__ import annotations
 import json
 from typing import AsyncIterator, Mapping, Sequence
 
-from sera.api.llm import Delta, ErroDoProvedor, Fim, Uso
+from sera.api.busca import ResultadoBusca
+from sera.api.llm import (
+    ChamadaFerramenta,
+    Delta,
+    ErroDoProvedor,
+    Ferramenta,
+    Fim,
+    Uso,
+)
+
+
+class FakeBusca:
+    def __init__(
+        self,
+        resultados: Sequence[ResultadoBusca] | None = None,
+        *,
+        erro: Exception | None = None,
+    ) -> None:
+        self.resultados = list(resultados or [])
+        self.erro = erro
+        self.consultas: list[str] = []
+
+    async def pesquisar(self, consulta: str) -> list[ResultadoBusca]:
+        self.consultas.append(consulta)
+        if self.erro is not None:
+            raise self.erro
+        return list(self.resultados)
 
 
 class FakeLLM:
@@ -14,14 +40,18 @@ class FakeLLM:
         falhar_antes: bool = False,
         falhar_apos: int | None = None,
         uso: Uso | None = None,
+        chamadas: Sequence[ChamadaFerramenta] = (),
     ) -> None:
         self.chunks = list(chunks)
         self.falhar_antes = falhar_antes
         self.falhar_apos = falhar_apos
         self.uso = uso
+        self.chamadas = list(chamadas)
         self.mensagens: list[dict] = []
         self.temperatura: float | None = None
         self.max_tokens: int | None = None
+        self.ferramentas: list[dict] | None = None
+        self.chamadas_recebidas = 0
 
     async def stream(
         self,
@@ -29,13 +59,23 @@ class FakeLLM:
         *,
         temperatura: float,
         max_tokens: int,
-    ) -> AsyncIterator[Delta | Fim]:
+        ferramentas: Sequence[Mapping] | None = None,
+    ) -> AsyncIterator[Delta | Ferramenta | Fim]:
         self.mensagens = [dict(mensagem) for mensagem in mensagens]
         self.temperatura = temperatura
         self.max_tokens = max_tokens
+        self.ferramentas = list(ferramentas) if ferramentas else None
+        self.chamadas_recebidas += 1
 
         if self.falhar_antes:
             raise ErroDoProvedor("falha simulada", status=500)
+
+        if self.chamadas:
+            pendentes = self.chamadas
+            self.chamadas = []
+            yield Ferramenta(tuple(pendentes))
+            yield Fim(self.uso)
+            return
 
         for indice, chunk in enumerate(self.chunks):
             if self.falhar_apos is not None and indice >= self.falhar_apos:

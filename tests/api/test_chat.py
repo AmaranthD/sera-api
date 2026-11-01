@@ -4,7 +4,10 @@ import httpx
 import pytest
 
 from sera.api import Config, criar_app
+from sera.api.busca import BuscaIndisponivel, ResultadoBusca
+from sera.api.llm import ChamadaFerramenta
 from tests.api.ajuda import (
+    FakeBusca,
     FakeLLM,
     criar_pessoa,
     eventos,
@@ -310,4 +313,106 @@ async def test_janela_de_historico(config, fake):
         ]
         assert fake.mensagens[1]["content"] == "segunda"
         assert fake.mensagens[3]["content"] == "terceira"
+
+
+def _config_com_busca(config: Config) -> Config:
+    return replace(
+        config,
+        llm_provider="openai",
+        busca_habilitada=True,
+        tavily_api_key="tvly-teste",
+        busca_max_resultados=3,
+    )
+
+
+def _resultados_busca() -> list[ResultadoBusca]:
+    return [
+        ResultadoBusca(
+            titulo="Previsão do tempo",
+            url="https://exemplo.com/tempo",
+            trecho="Sol com algumas nuvens, 30 °C.",
+        )
+    ]
+
+
+async def _cliente_com_busca(config, fake, busca):
+    app = criar_app(_config_com_busca(config), llm=fake, busca=busca)
+    transporte = httpx.ASGITransport(app=app)
+    return httpx.AsyncClient(transport=transporte, base_url="http://test")
+
+
+async def test_busca_desligada_nao_passa_ferramentas(cliente, fake):
+    await criar_pessoa(cliente)
+    await cliente.post(
+        "/chat",
+        json={"pessoa_id": "maria", "mensagem": "pesquise o dólar hoje"},
+    )
+    assert fake.ferramentas is None
+
+
+async def test_pesquisa_explicita_consulta_antes_do_modelo(config, fake):
+    busca = FakeBusca(_resultados_busca())
+    async with await _cliente_com_busca(config, fake, busca) as cliente:
+        await criar_pessoa(cliente)
+        resposta = await cliente.post(
+            "/chat",
+            json={
+                "pessoa_id": "maria",
+                "mensagem": "pesquise a previsão do tempo em São Paulo",
+            },
+        )
+
+    assert busca.consultas == ["a previsão do tempo em São Paulo"]
+    assert "Resultados da busca na internet" in system_prompt(fake)
+    assert "https://exemplo.com/tempo" in system_prompt(fake)
+    # A busca já foi feita; o modelo não recebe ferramentas nesta resposta.
+    assert fake.ferramentas is None
+
+    ev = eventos(resposta.text)
+    fontes = [dados for nome, dados in ev if nome == "sources"]
+    assert fontes[0]["fontes"][0]["url"] == "https://exemplo.com/tempo"
+
+
+async def test_modelo_decide_pesquisar_por_tool_call(config, fake):
+    busca = FakeBusca(_resultados_busca())
+    fake.chamadas = [
+        ChamadaFerramenta(
+            id="call_1",
+            nome="pesquisar_web",
+            argumentos='{"consulta": "dólar hoje"}',
+        )
+    ]
+    fake.chunks = ["O dólar está em alta (https://exemplo.com/dolar)."]
+
+    async with await _cliente_com_busca(config, fake, busca) as cliente:
+        await criar_pessoa(cliente)
+        resposta = await cliente.post(
+            "/chat",
+            json={"pessoa_id": "maria", "mensagem": "quanto está o dólar hoje?"},
+        )
+
+    assert busca.consultas == ["dólar hoje"]
+    assert fake.chamadas_recebidas == 2
+    assert "https://exemplo.com/tempo" in system_prompt(fake)
+    assert fake.mensagens[-1]["role"] == "user"
+
+    ev = eventos(resposta.text)
+    assert any(nome == "tool" for nome, _ in ev)
+    assert any(nome == "sources" for nome, _ in ev)
+    assert tokens(ev) == ["O dólar está em alta (https://exemplo.com/dolar)."]
+
+
+async def test_busca_falhando_nao_quebra_o_chat(config, fake):
+    busca = FakeBusca(erro=BuscaIndisponivel("fora do ar"))
+    async with await _cliente_com_busca(config, fake, busca) as cliente:
+        await criar_pessoa(cliente)
+        resposta = await cliente.post(
+            "/chat",
+            json={"pessoa_id": "maria", "mensagem": "pesquise o dólar"},
+        )
+
+    assert resposta.status_code == 200
+    assert "A busca falhou agora" in system_prompt(fake)
+    assert tokens(eventos(resposta.text)) == ["Olá", ", ", "Maria!"]
+
 

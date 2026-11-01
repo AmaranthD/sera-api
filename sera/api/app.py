@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from ..prompt import carregar_personality
 from .auth import Autenticador, AutenticadorSupabase
+from .busca import ClienteTavily
 from .config import Config
 from .db import Banco
 from .db_supabase import BancoSupabase
@@ -25,6 +26,7 @@ def criar_app(
     llm: ClienteLLM | None = None,
     banco: Banco | None = None,
     autenticador: Autenticador | None = None,
+    busca: ClienteTavily | None = None,
 ) -> FastAPI:
     config = config or Config.de_env()
 
@@ -46,6 +48,10 @@ def criar_app(
     app.state.banco = banco_local
     app.state.banco_fabrica = fabrica
     app.state.llm = llm or _criar_llm(config)
+    if busca is not None:
+        app.state.busca = busca
+    else:
+        app.state.busca = ClienteTavily(config) if config.busca_ativa else None
     app.state.personality = personality
     app.state.autenticador = autenticador
     if config.auth_required and app.state.autenticador is None:
@@ -69,6 +75,17 @@ def criar_app(
             "usando %s",
             config.llm_base_url,
             config.url_chat,
+        )
+    if config.busca_habilitada and not config.tavily_api_key:
+        logger.warning(
+            "BUSCA_HABILITADA está ligada, mas TAVILY_API_KEY não foi "
+            "definida; a busca web fica desligada"
+        )
+    elif config.busca_ativa:
+        logger.info(
+            "busca web ativa: provedor=%s max_resultados=%s",
+            config.busca_provedor,
+            config.busca_max_resultados,
         )
 
     if config.cors_origins or config.cors_origin_regex:

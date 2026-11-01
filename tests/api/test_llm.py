@@ -8,6 +8,7 @@ from sera.api.llm import (
     ClienteOpenAICompat,
     Delta,
     ErroDoProvedor,
+    Ferramenta,
     Fim,
 )
 
@@ -179,3 +180,115 @@ async def test_erro_http_nao_retentavel_vira_erro_do_provedor():
         await _coletar(cliente)
     assert capturado.value.status == 401
     assert capturado.value.retentavel is False
+
+
+async def test_parseia_tool_calls_fragmentados():
+    def linha(dados: dict) -> str:
+        return f"data: {json.dumps(dados, ensure_ascii=False)}\n\n"
+
+    sse = (
+        linha(
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": "call_1",
+                                    "function": {
+                                        "name": "pesquisar_web",
+                                        "arguments": '{"cons',
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        )
+        + linha(
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "function": {
+                                        "arguments": 'ulta": "dólar"}',
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        )
+        + linha(
+            {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]}
+        )
+        + "data: [DONE]\n\n"
+    ).encode()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        corpo = json.loads(request.read())
+        assert corpo["tools"][0]["function"]["name"] == "pesquisar_web"
+        return httpx.Response(
+            200, content=sse, headers={"content-type": "text/event-stream"}
+        )
+
+    ferramenta = {
+        "type": "function",
+        "function": {
+            "name": "pesquisar_web",
+            "parameters": {"type": "object"},
+        },
+    }
+    cliente = ClienteOpenAICompat(
+        _config(), transporte=httpx.MockTransport(handler)
+    )
+    eventos = [
+        evento
+        async for evento in cliente.stream(
+            [{"role": "user", "content": "oi"}],
+            temperatura=0.5,
+            max_tokens=8,
+            ferramentas=[ferramenta],
+        )
+    ]
+
+    chamadas = next(e for e in eventos if isinstance(e, Ferramenta)).chamadas
+    assert len(chamadas) == 1
+    assert chamadas[0].id == "call_1"
+    assert chamadas[0].nome == "pesquisar_web"
+    assert json.loads(chamadas[0].argumentos) == {"consulta": "dólar"}
+
+
+async def test_reenvia_sem_ferramentas_se_provedor_rejeitar():
+    corpos: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        corpo = json.loads(request.read())
+        corpos.append(corpo)
+        if "tools" in corpo:
+            return httpx.Response(400, content=b"tools not supported")
+        return httpx.Response(200, content=SSE)
+
+    ferramenta = {"type": "function", "function": {"name": "x"}}
+    cliente = ClienteOpenAICompat(
+        _config(), transporte=httpx.MockTransport(handler)
+    )
+    eventos = [
+        evento
+        async for evento in cliente.stream(
+            [{"role": "user", "content": "oi"}],
+            temperatura=0.5,
+            max_tokens=8,
+            ferramentas=[ferramenta],
+        )
+    ]
+
+    assert "tools" in corpos[0]
+    assert "tools" not in corpos[1]
+    assert [e.texto for e in eventos if isinstance(e, Delta)] == ["Olá", "!"]

@@ -1,8 +1,27 @@
 # Planejamento — busca na internet para a Sera
 
-> **Status em 2026-10-31:** proposta, ainda não implementado. O `jw-mcp`
-> ficou **fora de escopo** por enquanto; a decisão foi que, se entrar, será
-> como serviço separado. Este documento cobre apenas a busca web.
+> **Status em 2026-11-01:** implementado com **Tavily** (MVP).
+> `BUSCA_HABILITADA=true` + `TAVILY_API_KEY` ligam a busca. O `jw-mcp`
+> continua **fora de escopo**; se entrar, será como serviço separado.
+> Este documento cobre apenas a busca web.
+
+## Implementação atual
+
+- `sera/api/busca.py`: cliente Tavily, normalização, cache em memória e
+  erros tipados.
+- `sera/api/ferramentas.py`: schema da `pesquisar_web`, detecção de pedido
+  explícito e formatação dos resultados.
+- `sera/api/llm.py`: parser de `tool_calls` em streaming e fallback quando
+  o provedor rejeita `tools`.
+- `sera/api/rotas.py`: busca, loop de até `BUSCA_MAX_RODADAS` rodadas e
+  eventos SSE `tool`/`sources`.
+- **Pedido explícito:** “pesquise X”, “busque X”, “procure X” já dispara a
+  busca antes do modelo; a resposta sai sem ferramentas.
+- **Pedido implícito:** “quanto está o dólar?” deixa o modelo decidir e
+  chamar a ferramenta.
+- Os resultados entram no próprio system prompt, não como mensagens
+  `assistant`/`tool` — isso evita o vazamento de marcação interna do
+  MiniMax via NVIDIA NIM.
 
 ## Contexto atual
 
@@ -207,20 +226,21 @@ Adicionar ao system prompt, sem quebrar a persona:
 
 ```env
 BUSCA_HABILITADA=false
-BUSCA_PROVEDOR=brave
-BRAVE_API_KEY=...
+BUSCA_PROVEDOR=tavily
+TAVILY_API_KEY=tvly-...
 BUSCA_MAX_RESULTADOS=5
 BUSCA_TIMEOUT=15
 BUSCA_CACHE_TTL=600
 BUSCA_PAIS=BR
-BUSCA_IDIOMA=pt
+BUSCA_MAX_RODADAS=1
 ```
 
 No Render:
 
-- `BRAVE_API_KEY` como secret (`sync: false`);
-- `BUSCA_HABILITADA=false` no primeiro deploy;
-- ligar depois do smoke test.
+- `TAVILY_API_KEY` como secret (`sync: false`);
+- `BUSCA_HABILITADA=true` (ou `false` para desligar sem remover a chave);
+- `BUSCA_MAX_RODADAS=1` deixa o modelo no máximo uma rodada de decisão;
+  ele ainda pode pedir várias consultas em paralelo na mesma rodada.
 
 ## Segurança e privacidade
 

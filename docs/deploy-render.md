@@ -91,6 +91,7 @@ Passos:
 3. Preencher os valores pedidos (`sync: false`):
    - `SUPABASE_ANON_KEY`: a publishable/anon key do projeto;
    - `LLM_API_KEY`: a chave do NVIDIA NIM (`nvapi-...`);
+   - `TAVILY_API_KEY`: a chave da Tavily (`tvly-...`), usada pela busca web;
    - `CORS_ORIGINS`: a URL do Pages, ex. `https://<projeto>.pages.dev`
      (o regex `*.pages.dev` já está liberado para previews).
 4. Deploy. O primeiro build instala as dependências e sobe o uvicorn.

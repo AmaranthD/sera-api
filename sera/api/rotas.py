@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated
 
@@ -29,10 +30,28 @@ from ..prompt import (
     validar_ajustes,
 )
 from .auth import Usuario, usuario_atual
+from .busca import BuscaIndisponivel, ClienteTavily, ResultadoBusca
 from .config import Config
 from .db import Banco
 from .db_supabase import Conflito
-from .llm import ClienteLLM, Delta, ErroDoProvedor, Fim, Uso
+from .ferramentas import (
+    FERRAMENTAS,
+    INSTRUCAO_BUSCA,
+    FerramentaDesconhecida,
+    FerramentaInvalida,
+    bloco_resultados,
+    consulta_explicita,
+    executar_ferramenta,
+)
+from .llm import (
+    ChamadaFerramenta,
+    ClienteLLM,
+    Delta,
+    ErroDoProvedor,
+    Ferramenta,
+    Fim,
+    Uso,
+)
 from .schemas import (
     AjusteEntrada,
     ChatEntrada,
@@ -44,6 +63,16 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@dataclass(frozen=True)
+class Pesquisando:
+    consulta: str
+
+
+@dataclass(frozen=True)
+class Fontes:
+    fontes: tuple[dict, ...]
 
 
 def config_da_app(request: Request) -> Config:
@@ -348,6 +377,9 @@ async def chat(
     system = await _montar_system(
         personality, linha_pessoa, banco, config, corpo.mensagem
     )
+    busca, ferramentas, fontes, system = await _preparar_busca(
+        request, config, corpo.mensagem, system
+    )
     mensagens = [{"role": "system", "content": system}]
     mensagens.extend(
         {"role": linha["papel"], "content": linha["conteudo"]} for linha in historico
@@ -356,7 +388,13 @@ async def chat(
 
     if not corpo.stream:
         return await _resposta_unica(
-            banco, llm, config, conversa["id"], mensagens
+            banco,
+            llm,
+            config,
+            conversa["id"],
+            mensagens,
+            busca=busca,
+            ferramentas=ferramentas,
         )
 
     return await _resposta_stream(
@@ -367,7 +405,53 @@ async def chat(
         conversa["id"],
         mensagem_usuario["id"],
         mensagens,
+        busca=busca,
+        ferramentas=ferramentas,
+        fontes=fontes,
     )
+
+
+async def _preparar_busca(
+    request: Request,
+    config: Config,
+    mensagem: str,
+    system: str,
+) -> tuple[ClienteTavily | None, list[dict] | None, list[dict], str]:
+    """Liga as ferramentas e, se o pedido for explícito, já busca antes.
+
+    "Pesquise X" é interpretado como busca na internet sem depender de o
+    modelo decidir chamar a ferramenta.
+    """
+    busca: ClienteTavily | None = getattr(request.app.state, "busca", None)
+    if not config.busca_ativa or busca is None:
+        return None, None, [], system
+
+    fontes: list[dict] = []
+    consulta = consulta_explicita(mensagem)
+
+    if consulta is None:
+        # O cliente Gemini desta camada ainda não executa tool calling.
+        if config.llm_provider != "openai":
+            return busca, None, fontes, system
+        system = f"{system}\n\n{INSTRUCAO_BUSCA}"
+        return busca, list(FERRAMENTAS), fontes, system
+
+    try:
+        resultados = await busca.pesquisar(consulta)
+    except BuscaIndisponivel as erro:
+        logger.warning("busca explícita falhou: %s", erro.detalhe)
+        system = (
+            f"{system}\n\n## Busca na internet\n"
+            "A busca falhou agora. Responda sem inventar dados e avise que "
+            "não conseguiu consultar a internet."
+        )
+        return busca, None, fontes, system
+
+    fontes = [resultado.como_dict() for resultado in resultados]
+    system = f"{system}\n\n{bloco_resultados(consulta, resultados)}"
+    # A busca já foi feita: sem ferramentas nesta resposta para não repetir
+    # consultas nem expor o loop de tool calling.
+    return busca, None, fontes, system
 
 
 async def _montar_system(
@@ -432,19 +516,20 @@ async def _resposta_unica(
     config: Config,
     conversa_id: str,
     mensagens: list[dict],
+    *,
+    busca: ClienteTavily | None = None,
+    ferramentas: list[dict] | None = None,
 ) -> dict:
     partes: list[str] = []
     uso: Uso | None = None
     try:
-        async for evento in llm.stream(
-            mensagens,
-            temperatura=config.temperatura,
-            max_tokens=config.max_tokens,
+        async for evento in _fluxo_com_ferramentas(
+            llm, mensagens, config, busca, ferramentas
         ):
             if isinstance(evento, Delta):
                 partes.append(evento.texto)
             elif isinstance(evento, Fim):
-                uso = evento.uso
+                uso = _somar_uso(uso, evento.uso)
     except ErroDoProvedor as erro:
         logger.warning("provedor falhou: %s", erro.detalhe)
         raise HTTPException(
@@ -462,6 +547,128 @@ async def _resposta_unica(
     }
 
 
+async def _fluxo_com_ferramentas(
+    llm: ClienteLLM,
+    mensagens: list[dict],
+    config: Config,
+    busca: ClienteTavily | None,
+    ferramentas: list[dict] | None,
+):
+    """Executa o loop de tool calling e emite Delta/Fim e eventos de busca.
+
+    Os resultados entram no system prompt em vez de virarem mensagens
+    `assistant`/`tool`: alguns modelos (MiniMax via NVIDIA NIM) vazam a
+    marcação interna de tool call quando relê esse protocolo. Assim o modelo
+    vê apenas system/user e, na última rodada, responde sem ferramentas.
+    """
+    conversa = [dict(mensagem) for mensagem in mensagens]
+    rodadas = config.busca_max_rodadas if busca is not None and ferramentas else 0
+    chamadas: list[ChamadaFerramenta] = []
+
+    if rodadas == 0:
+        async for evento in llm.stream(
+            conversa,
+            temperatura=config.temperatura,
+            max_tokens=config.max_tokens,
+            ferramentas=None,
+        ):
+            yield evento
+        return
+
+    for _ in range(rodadas):
+        chamadas = []
+        async for evento in llm.stream(
+            conversa,
+            temperatura=config.temperatura,
+            max_tokens=config.max_tokens,
+            ferramentas=ferramentas,
+        ):
+            if isinstance(evento, Ferramenta):
+                chamadas.extend(evento.chamadas)
+            else:
+                yield evento
+
+        if not chamadas or busca is None:
+            return
+
+        for chamada in chamadas:
+            yield Pesquisando(_consulta_da_chamada(chamada))
+
+        bloco, fontes = await _buscar_chamadas(chamadas, busca)
+        if fontes:
+            yield Fontes(tuple(fontes))
+        if bloco:
+            conversa[0]["content"] = (
+                f"{conversa[0].get('content') or ''}\n\n{bloco}"
+            )
+
+    # Última rodada: sem ferramentas, para o modelo fechar a resposta com o
+    # que já foi encontrado. Tirar a instrução de ferramentas do system evita
+    # que o modelo tente chamar algo que não existe mais.
+    conversa[0]["content"] = (
+        f"{conversa[0].get('content') or ''}".replace(INSTRUCAO_BUSCA, "")
+    ).strip()
+    async for evento in llm.stream(
+        conversa,
+        temperatura=config.temperatura,
+        max_tokens=config.max_tokens,
+        ferramentas=None,
+    ):
+        if not isinstance(evento, Ferramenta):
+            yield evento
+
+
+async def _buscar_chamadas(
+    chamadas: list[ChamadaFerramenta], busca: ClienteTavily
+) -> tuple[str, list[dict]]:
+    blocos: list[str] = []
+    fontes: list[dict] = []
+    vistos: set[str] = set()
+
+    for chamada in chamadas:
+        consulta = _consulta_da_chamada(chamada)
+        try:
+            resultado = await executar_ferramenta(
+                chamada.nome, chamada.argumentos, busca
+            )
+        except (
+            FerramentaDesconhecida,
+            FerramentaInvalida,
+            BuscaIndisponivel,
+        ) as erro:
+            logger.warning("ferramenta falhou: %s", erro)
+            blocos.append(
+                "## Busca na internet\n"
+                f'A busca por "{consulta}" falhou: {erro}. '
+                "Responda sem inventar dados e avise que não conseguiu "
+                "consultar a internet."
+            )
+            continue
+
+        itens = resultado.get("resultados") or []
+        resultados = [ResultadoBusca(**item) for item in itens]
+        blocos.append(
+            bloco_resultados(resultado.get("consulta") or consulta, resultados)
+        )
+        for item in itens:
+            url = item.get("url")
+            if url and url not in vistos:
+                vistos.add(url)
+                fontes.append(item)
+
+    return "\n\n".join(blocos), fontes
+
+
+def _consulta_da_chamada(chamada: ChamadaFerramenta) -> str:
+    try:
+        dados = json.loads(chamada.argumentos or "{}")
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(dados, dict):
+        return ""
+    return " ".join(str(dados.get("consulta") or "").split())
+
+
 async def _resposta_stream(
     request: Request,
     banco: Banco,
@@ -470,12 +677,12 @@ async def _resposta_stream(
     conversa_id: str,
     mensagem_usuario_id: str,
     mensagens: list[dict],
+    *,
+    busca: ClienteTavily | None = None,
+    ferramentas: list[dict] | None = None,
+    fontes: list[dict] | None = None,
 ) -> StreamingResponse:
-    fluxo = llm.stream(
-        mensagens,
-        temperatura=config.temperatura,
-        max_tokens=config.max_tokens,
-    )
+    fluxo = _fluxo_com_ferramentas(llm, mensagens, config, busca, ferramentas)
     try:
         primeiro = await anext(fluxo)
     except StopAsyncIteration:
@@ -485,6 +692,8 @@ async def _resposta_stream(
         raise HTTPException(
             status_code=502, detail=f"provedor falhou: {erro.detalhe}"
         ) from erro
+
+    fontes_iniciais = list(fontes or [])
 
     async def gerar():
         partes: list[str] = []
@@ -496,13 +705,25 @@ async def _resposta_stream(
                 "mensagem_id": mensagem_usuario_id,
             },
         )
+        if fontes_iniciais:
+            yield _sse("sources", {"fontes": fontes_iniciais})
         try:
             async for evento in _encadear(primeiro, fluxo):
                 if isinstance(evento, Delta):
                     partes.append(evento.texto)
                     yield _sse("token", {"texto": evento.texto})
                 elif isinstance(evento, Fim):
-                    uso = evento.uso
+                    uso = _somar_uso(uso, evento.uso)
+                elif isinstance(evento, Pesquisando):
+                    yield _sse(
+                        "tool",
+                        {
+                            "nome": "pesquisar_web",
+                            "consulta": evento.consulta,
+                        },
+                    )
+                elif isinstance(evento, Fontes):
+                    yield _sse("sources", {"fontes": list(evento.fontes)})
 
             if await request.is_disconnected():
                 if partes:
@@ -593,6 +814,26 @@ def _uso_dict(uso: Uso | None) -> dict | None:
         "completion_tokens": uso.completion_tokens,
         "total_tokens": uso.total_tokens,
     }
+
+
+def _somar_uso(atual: Uso | None, novo: Uso | None) -> Uso | None:
+    if novo is None:
+        return atual
+    if atual is None:
+        return novo
+    return Uso(
+        prompt_tokens=_somar_token(atual.prompt_tokens, novo.prompt_tokens),
+        completion_tokens=_somar_token(
+            atual.completion_tokens, novo.completion_tokens
+        ),
+        total_tokens=_somar_token(atual.total_tokens, novo.total_tokens),
+    )
+
+
+def _somar_token(a: int | None, b: int | None) -> int | None:
+    if a is None and b is None:
+        return None
+    return (a or 0) + (b or 0)
 
 
 def _data(iso: str):

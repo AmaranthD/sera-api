@@ -21,6 +21,18 @@ class Delta:
 
 
 @dataclass(frozen=True)
+class ChamadaFerramenta:
+    id: str
+    nome: str
+    argumentos: str
+
+
+@dataclass(frozen=True)
+class Ferramenta:
+    chamadas: tuple[ChamadaFerramenta, ...]
+
+
+@dataclass(frozen=True)
 class Uso:
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
@@ -32,7 +44,7 @@ class Fim:
     uso: Uso | None = None
 
 
-Evento = Delta | Fim
+Evento = Delta | Ferramenta | Fim
 
 
 class ErroDoProvedor(Exception):
@@ -54,10 +66,11 @@ class ErroDoProvedor(Exception):
 class ClienteLLM(Protocol):
     def stream(
         self,
-        mensagens: Sequence[Mapping[str, str]],
+        mensagens: Sequence[Mapping[str, Any]],
         *,
         temperatura: float,
         max_tokens: int,
+        ferramentas: Sequence[Mapping[str, Any]] | None = None,
     ) -> AsyncIterator[Evento]: ...
 
 
@@ -80,10 +93,11 @@ class ClienteGemini:
 
     async def stream(
         self,
-        mensagens: Sequence[Mapping[str, str]],
+        mensagens: Sequence[Mapping[str, Any]],
         *,
         temperatura: float,
         max_tokens: int,
+        ferramentas: Sequence[Mapping[str, Any]] | None = None,
     ) -> AsyncIterator[Evento]:
         tentativas = 0
         while True:
@@ -92,7 +106,7 @@ class ClienteGemini:
                 async for evento in self._tentativa(
                     mensagens, temperatura, max_tokens
                 ):
-                    if isinstance(evento, Delta):
+                    if isinstance(evento, (Delta, Ferramenta)):
                         emitido = True
                     yield evento
                 return
@@ -175,26 +189,35 @@ class ClienteOpenAICompat:
 
     async def stream(
         self,
-        mensagens: Sequence[Mapping[str, str]],
+        mensagens: Sequence[Mapping[str, Any]],
         *,
         temperatura: float,
         max_tokens: int,
+        ferramentas: Sequence[Mapping[str, Any]] | None = None,
     ) -> AsyncIterator[Evento]:
         incluir_uso = True
+        usar_ferramentas = bool(ferramentas)
         tentativas = 0
         while True:
             emitido = False
             try:
                 async for evento in self._tentativa(
-                    mensagens, temperatura, max_tokens, incluir_uso
+                    mensagens,
+                    temperatura,
+                    max_tokens,
+                    incluir_uso,
+                    ferramentas if usar_ferramentas else None,
                 ):
-                    if isinstance(evento, Delta):
+                    if isinstance(evento, (Delta, Ferramenta)):
                         emitido = True
                     yield evento
                 return
             except ErroDoProvedor as erro:
                 if erro.codigo == "stream_options" and incluir_uso:
                     incluir_uso = False
+                    continue
+                if erro.codigo == "ferramentas" and usar_ferramentas:
+                    usar_ferramentas = False
                     continue
                 if emitido or not erro.retentavel or tentativas >= 1:
                     raise
@@ -203,21 +226,24 @@ class ClienteOpenAICompat:
 
     async def _tentativa(
         self,
-        mensagens: Sequence[Mapping[str, str]],
+        mensagens: Sequence[Mapping[str, Any]],
         temperatura: float,
         max_tokens: int,
         incluir_uso: bool,
+        ferramentas: Sequence[Mapping[str, Any]] | None,
     ) -> AsyncIterator[Evento]:
         config = self._config
         payload: dict = {
             "model": config.llm_model,
-            "messages": [dict(mensagem) for mensagem in mensagens],
+            "messages": [_mensagem_para_payload(mensagem) for mensagem in mensagens],
             "stream": True,
             "temperature": temperatura,
             "max_tokens": max_tokens,
         }
         if incluir_uso:
             payload["stream_options"] = {"include_usage": True}
+        if ferramentas:
+            payload["tools"] = [dict(ferramenta) for ferramenta in ferramentas]
 
         cabecalhos = {
             "Accept": "text/event-stream",
@@ -244,12 +270,12 @@ class ClienteOpenAICompat:
                 ) as resposta:
                     if resposta.status_code >= 400:
                         corpo = (await resposta.aread()).decode("utf-8", "replace")
-                        codigo = (
-                            "stream_options"
-                            if resposta.status_code == 400
-                            and "stream_options" in corpo
-                            else "http"
-                        )
+                        codigo = "http"
+                        if resposta.status_code == 400:
+                            if "stream_options" in corpo:
+                                codigo = "stream_options"
+                            elif ferramentas and "tool" in corpo.lower():
+                                codigo = "ferramentas"
                         raise ErroDoProvedor(
                             f"provedor respondeu {resposta.status_code}: "
                             f"{corpo[:300]}",
@@ -286,10 +312,14 @@ class ClienteOpenAICompat:
                         texto = _texto_da_resposta(bruto)
                         if texto:
                             yield Delta(texto)
+                        chamadas = _chamadas_da_resposta(bruto)
+                        if chamadas:
+                            yield Ferramenta(tuple(chamadas))
                         bruto_uso = bruto.get("usage")
                         yield Fim(_uso_de(bruto_uso) if bruto_uso else None)
                         return
 
+                    acumuladas: dict[int, dict] = {}
                     async for linha in resposta.aiter_lines():
                         if not linha.startswith("data:"):
                             continue
@@ -315,6 +345,8 @@ class ClienteOpenAICompat:
                             texto = delta.get("content")
                             if texto:
                                 yield Delta(texto)
+                            for bruto_chamada in delta.get("tool_calls") or []:
+                                _acumular_chamada(acumuladas, bruto_chamada)
         except httpx.TimeoutException as erro:
             raise ErroDoProvedor(
                 f"timeout ao falar com o provedor: {erro}",
@@ -328,7 +360,80 @@ class ClienteOpenAICompat:
                 retentavel=True,
             ) from erro
 
+        chamadas = _chamadas_acumuladas(acumuladas)
+        if chamadas:
+            yield Ferramenta(tuple(chamadas))
         yield Fim(uso)
+
+
+def _mensagem_para_payload(mensagem: Mapping[str, Any]) -> dict:
+    return dict(mensagem)
+
+
+def _acumular_chamada(acumuladas: dict[int, dict], bruto: Any) -> None:
+    if not isinstance(bruto, Mapping):
+        return
+    indice = bruto.get("index")
+    if not isinstance(indice, int):
+        indice = max(acumuladas, default=0) if acumuladas else 0
+    atual = acumuladas.setdefault(
+        indice, {"id": "", "nome": "", "argumentos": ""}
+    )
+    if bruto.get("id"):
+        atual["id"] = str(bruto["id"])
+    funcao = bruto.get("function")
+    if isinstance(funcao, Mapping):
+        if funcao.get("name"):
+            atual["nome"] = str(funcao["name"])
+        argumentos = funcao.get("arguments")
+        if argumentos:
+            atual["argumentos"] += str(argumentos)
+
+
+def _chamadas_acumuladas(
+    acumuladas: Mapping[int, Mapping[str, str]],
+) -> list[ChamadaFerramenta]:
+    chamadas: list[ChamadaFerramenta] = []
+    for indice in sorted(acumuladas):
+        dados = acumuladas[indice]
+        nome = str(dados.get("nome") or "")
+        if not nome:
+            continue
+        chamadas.append(
+            ChamadaFerramenta(
+                id=str(dados.get("id") or f"call_{indice}"),
+                nome=nome,
+                argumentos=str(dados.get("argumentos") or "{}"),
+            )
+        )
+    return chamadas
+
+
+def _chamadas_da_resposta(bruto: Mapping) -> list[ChamadaFerramenta]:
+    escolhas = bruto.get("choices") or []
+    if not escolhas or not isinstance(escolhas[0], Mapping):
+        return []
+    mensagem = escolhas[0].get("message") or {}
+    if not isinstance(mensagem, Mapping):
+        return []
+    chamadas: list[ChamadaFerramenta] = []
+    for indice, bruta in enumerate(mensagem.get("tool_calls") or []):
+        if not isinstance(bruta, Mapping):
+            continue
+        funcao = bruta.get("function") or {}
+        if not isinstance(funcao, Mapping):
+            continue
+        nome = str(funcao.get("name") or "")
+        if not nome:
+            continue
+        chamadas.append(
+            ChamadaFerramenta(
+                id=str(bruta.get("id") or f"call_{indice}"),
+                nome=nome,
+                argumentos=str(funcao.get("arguments") or "{}"),
+            )
+        )
+    return chamadas
 
 
 def _converter_para_gemini(

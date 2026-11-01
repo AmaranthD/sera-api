@@ -59,6 +59,14 @@ class Config:
     notas_path: Path = _RAIZ.parent / "notes" / "Notes"
     max_trechos_contexto: int = 3
     max_chars_contexto: int = 6000
+    busca_habilitada: bool = False
+    busca_provedor: str = "tavily"
+    tavily_api_key: str | None = None
+    busca_max_resultados: int = 5
+    busca_timeout: float = 15.0
+    busca_cache_ttl: float = 600.0
+    busca_pais: str = "BR"
+    busca_max_rodadas: int = 1
     supabase_url: str | None = None
     supabase_anon_key: str | None = None
     supabase_jwt_aud: str = "authenticated"
@@ -78,6 +86,19 @@ class Config:
             raise ValueError("max_trechos_contexto não pode ser negativo")
         if self.max_chars_contexto <= 0:
             raise ValueError("max_chars_contexto precisa ser positivo")
+        if self.busca_provedor != "tavily":
+            raise ValueError(
+                f"busca_provedor inválido: {self.busca_provedor!r}; "
+                "por enquanto só 'tavily' é suportado"
+            )
+        if self.busca_max_resultados <= 0:
+            raise ValueError("busca_max_resultados precisa ser positivo")
+        if self.busca_timeout <= 0:
+            raise ValueError("busca_timeout precisa ser positivo")
+        if self.busca_cache_ttl < 0:
+            raise ValueError("busca_cache_ttl não pode ser negativo")
+        if self.busca_max_rodadas < 1:
+            raise ValueError("busca_max_rodadas precisa ser pelo menos 1")
         if self.llm_provider not in ("gemini", "openai"):
             raise ValueError(
                 f"llm_provider inválido: {self.llm_provider!r}; "
@@ -106,6 +127,10 @@ class Config:
 
     def _base_limpa(self) -> str:
         return self.llm_base_url.strip().rstrip("/")
+
+    @property
+    def busca_ativa(self) -> bool:
+        return self.busca_habilitada and bool(self.tavily_api_key)
 
     @property
     def url_chat(self) -> str:
@@ -160,6 +185,17 @@ class Config:
             notas_path=Path(texto("SERA_NOTAS", str(_RAIZ.parent / "notes" / "Notes"))),
             max_trechos_contexto=inteiro("SERA_MAX_TRECHOS", 3),
             max_chars_contexto=inteiro("SERA_MAX_CHARS_CONTEXTO", 6000),
+            busca_habilitada=texto("BUSCA_HABILITADA", "false").lower()
+            in ("1", "true", "yes", "on"),
+            busca_provedor=texto("BUSCA_PROVEDOR", "tavily").lower(),
+            tavily_api_key=(
+                opcional("TAVILY_API_KEY") or opcional("Tavily_API_KEY")
+            ),
+            busca_max_resultados=inteiro("BUSCA_MAX_RESULTADOS", 5),
+            busca_timeout=numero("BUSCA_TIMEOUT", 15.0),
+            busca_cache_ttl=numero("BUSCA_CACHE_TTL", 600.0),
+            busca_pais=texto("BUSCA_PAIS", "BR"),
+            busca_max_rodadas=inteiro("BUSCA_MAX_RODADAS", 1),
             supabase_url=opcional("SUPABASE_URL"),
             supabase_anon_key=(
                 opcional("SUPABASE_ANON_KEY")
