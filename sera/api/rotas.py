@@ -36,9 +36,11 @@ from .db import Banco
 from .db_supabase import Conflito
 from .ferramentas import (
     INSTRUCAO_BUSCA,
+    INSTRUCAO_JW,
     INSTRUCAO_MEMORIA,
     NOME_AJUSTAR,
     NOME_ESQUECER,
+    NOME_JW,
     NOME_LEMBRAR,
     NOME_PESQUISA,
     ContextoFerramentas,
@@ -50,6 +52,7 @@ from .ferramentas import (
     esquemas,
     executar_ferramenta,
 )
+from .jw import JWIndisponivel
 from .llm import (
     ChamadaFerramenta,
     ClienteLLM,
@@ -515,6 +518,7 @@ async def chat(
     )
     contexto = ContextoFerramentas(
         busca=busca,
+        jw=getattr(request.app.state, "jw", None),
         banco=banco,
         pessoa_id=pessoa_id,
         mensagem_usuario=corpo.mensagem,
@@ -580,9 +584,11 @@ async def _preparar_ferramentas(
     # O cliente Gemini desta camada ainda não executa tool calling.
     tool_calling = config.llm_provider == "openai"
     aprendizado = config.aprendizado_habilitado and tool_calling
+    jw = config.jw_ativa and tool_calling
     ferramentas = esquemas(
         busca=busca is not None and tool_calling,
         aprendizado=aprendizado,
+        jw=jw,
     )
     if not ferramentas and busca is None:
         return None, None, [], system
@@ -615,6 +621,8 @@ async def _preparar_ferramentas(
 
     if aprendizado:
         system = f"{system}\n\n{INSTRUCAO_MEMORIA}"
+    if jw:
+        system = f"{system}\n\n{INSTRUCAO_JW}"
 
     return busca, ferramentas or None, fontes, system
 
@@ -764,6 +772,8 @@ async def _fluxo_com_ferramentas(
     """
     conversa = [dict(mensagem) for mensagem in mensagens]
     rodadas = config.busca_max_rodadas if ferramentas else 0
+    if contexto.jw is not None and ferramentas:
+        rodadas = max(rodadas, config.jw_max_rodadas)
     chamadas: list[ChamadaFerramenta] = []
 
     if rodadas == 0:
@@ -812,7 +822,7 @@ async def _fluxo_com_ferramentas(
     # que já foi encontrado. Tirar as instruções do system evita que o modelo
     # tente chamar algo que não existe mais.
     conteudo = f"{conversa[0].get('content') or ''}"
-    for instrucao in (INSTRUCAO_BUSCA, INSTRUCAO_MEMORIA):
+    for instrucao in (INSTRUCAO_BUSCA, INSTRUCAO_MEMORIA, INSTRUCAO_JW):
         conteudo = conteudo.replace(instrucao, "")
     conversa[0]["content"] = conteudo.strip()
     async for evento in llm.stream(
@@ -854,6 +864,7 @@ async def _executar_chamadas(
             FerramentaDesconhecida,
             FerramentaInvalida,
             BuscaIndisponivel,
+            JWIndisponivel,
         ) as erro:
             logger.warning("ferramenta falhou: %s", erro)
             if chamada.nome == NOME_PESQUISA:
@@ -862,6 +873,12 @@ async def _executar_chamadas(
                     f'A busca por "{consulta}" falhou: {erro}. '
                     "Responda sem inventar dados e avise que não conseguiu "
                     "consultar a internet."
+                )
+            elif chamada.nome == NOME_JW:
+                blocos.append(
+                    "## Conteúdo JW\n"
+                    f"A consulta JW falhou: {erro}. Avise que não conseguiu "
+                    "consultar o conteúdo agora."
                 )
             else:
                 notas.append(
@@ -884,6 +901,20 @@ async def _executar_chamadas(
                 if url and url not in vistos:
                     vistos.add(url)
                     fontes.append(item)
+        elif chamada.nome == NOME_JW:
+            texto = str(resultado.get("texto") or "").strip()
+            if resultado.get("erro"):
+                blocos.append(
+                    "## Conteúdo JW\n"
+                    f"A ferramenta JW retornou um erro: {texto}"
+                )
+            else:
+                blocos.append(
+                    "## Conteúdo JW\n"
+                    f"{texto}\n\n"
+                    "Use apenas este conteúdo para responder e cite a URL "
+                    "quando houver."
+                )
         else:
             notas.append(_nota_de_ferramenta(chamada.nome, resultado))
 

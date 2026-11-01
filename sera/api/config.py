@@ -68,6 +68,11 @@ class Config:
     busca_cache_ttl: float = 600.0
     busca_pais: str = "BR"
     busca_max_rodadas: int = 1
+    jw_api_url: str | None = None
+    jw_api_key: str | None = None
+    jw_timeout: float = 90.0
+    jw_max_chars: int = 8000
+    jw_max_rodadas: int = 2
     fuso_horario: str = "America/Sao_Paulo"
     aprendizado_habilitado: bool = True
     supabase_url: str | None = None
@@ -102,6 +107,19 @@ class Config:
             raise ValueError("busca_cache_ttl não pode ser negativo")
         if self.busca_max_rodadas < 1:
             raise ValueError("busca_max_rodadas precisa ser pelo menos 1")
+        if self.jw_timeout <= 0:
+            raise ValueError("jw_timeout precisa ser positivo")
+        if self.jw_max_chars <= 0:
+            raise ValueError("jw_max_chars precisa ser positivo")
+        if self.jw_max_rodadas < 1:
+            raise ValueError("jw_max_rodadas precisa ser pelo menos 1")
+        if self.jw_api_url:
+            partes_jw = urlparse(self.jw_api_url)
+            if partes_jw.scheme not in ("http", "https") or not partes_jw.netloc:
+                raise ValueError(
+                    f"jw_api_url inválida: {self.jw_api_url!r}; "
+                    "use uma URL http(s) absoluta"
+                )
         try:
             ZoneInfo(self.fuso_horario)
         except (ValueError, ZoneInfoNotFoundError) as erro:
@@ -140,6 +158,10 @@ class Config:
     @property
     def busca_ativa(self) -> bool:
         return self.busca_habilitada and bool(self.tavily_api_key)
+
+    @property
+    def jw_ativa(self) -> bool:
+        return bool(self.jw_api_url and self.jw_api_key)
 
     @property
     def url_chat(self) -> str:
@@ -205,6 +227,11 @@ class Config:
             busca_cache_ttl=numero("BUSCA_CACHE_TTL", 600.0),
             busca_pais=texto("BUSCA_PAIS", "BR"),
             busca_max_rodadas=inteiro("BUSCA_MAX_RODADAS", 1),
+            jw_api_url=opcional("JW_API_URL"),
+            jw_api_key=opcional("JW_API_KEY"),
+            jw_timeout=numero("JW_TIMEOUT", 90.0),
+            jw_max_chars=inteiro("JW_MAX_CHARS", 8000),
+            jw_max_rodadas=inteiro("JW_MAX_RODADAS", 2),
             fuso_horario=texto("SERA_FUSO", "America/Sao_Paulo"),
             aprendizado_habilitado=texto("SERA_APRENDIZADO", "true").lower()
             in ("1", "true", "yes", "on"),

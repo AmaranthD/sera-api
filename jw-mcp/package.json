@@ -1,0 +1,16 @@
+{
+  "name": "sera-jw-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "jw-mcp HTTP/OAuth + facade REST para a Sera",
+  "scripts": {
+    "start": "node start.js"
+  },
+  "dependencies": {
+    "jw-mcp": "1.3.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

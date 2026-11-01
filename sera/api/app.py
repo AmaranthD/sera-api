@@ -12,6 +12,7 @@ from .busca import ClienteTavily
 from .config import Config
 from .db import Banco
 from .db_supabase import BancoSupabase
+from .jw import ClienteJW
 from .llm import ClienteGemini, ClienteLLM, ClienteOpenAICompat
 from .rotas import router
 
@@ -27,6 +28,7 @@ def criar_app(
     banco: Banco | None = None,
     autenticador: Autenticador | None = None,
     busca: ClienteTavily | None = None,
+    jw: ClienteJW | None = None,
 ) -> FastAPI:
     config = config or Config.de_env()
 
@@ -60,6 +62,10 @@ def criar_app(
         app.state.busca = busca
     else:
         app.state.busca = ClienteTavily(config) if config.busca_ativa else None
+    if jw is not None:
+        app.state.jw = jw
+    else:
+        app.state.jw = ClienteJW(config) if config.jw_ativa else None
     app.state.personality = personality
     app.state.autenticador = autenticador
     if config.auth_required and app.state.autenticador is None:
@@ -95,6 +101,8 @@ def criar_app(
             config.busca_provedor,
             config.busca_max_resultados,
         )
+    if config.jw_ativa:
+        logger.info("conteúdo JW ativo: %s", config.jw_api_url)
 
     if config.cors_origins or config.cors_origin_regex:
         app.add_middleware(

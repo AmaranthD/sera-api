@@ -56,6 +56,14 @@ services:
         value: America/Sao_Paulo
       - key: SERA_APRENDIZADO
         value: "true"
+      # Opcional: serviço separado em jw-mcp/README.md. Sem a URL/chave, a
+      # ferramenta JW fica desligada.
+      - key: JW_API_URL
+        sync: false
+      - key: JW_API_KEY
+        sync: false
+      - key: JW_MAX_RODADAS
+        value: "2"
       # Opcional: lista fechada de e-mails. Descomente e preencha para
       # impedir que qualquer conta autenticada use a API.
       # - key: SERA_EMAILS

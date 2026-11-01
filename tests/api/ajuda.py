@@ -4,6 +4,7 @@ import json
 from typing import AsyncIterator, Mapping, Sequence
 
 from sera.api.busca import ResultadoBusca
+from sera.api.jw import RespostaJW
 from sera.api.llm import (
     ChamadaFerramenta,
     Delta,
@@ -12,6 +13,19 @@ from sera.api.llm import (
     Fim,
     Uso,
 )
+
+
+class FakeJW:
+    def __init__(self, texto: str = "Matthew (40)", *, erro=None) -> None:
+        self.texto = texto
+        self.erro = erro
+        self.chamadas: list[tuple[str, dict]] = []
+
+    async def executar(self, ferramenta: str, argumentos=None):
+        self.chamadas.append((ferramenta, dict(argumentos or {})))
+        if self.erro is not None:
+            raise self.erro
+        return RespostaJW(ferramenta=ferramenta, texto=self.texto)
 
 
 class FakeBusca:

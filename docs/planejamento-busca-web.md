@@ -2,7 +2,7 @@
 
 > **Status em 2026-11-01:** implementado com **Tavily** (MVP).
 > `BUSCA_HABILITADA=true` + `TAVILY_API_KEY` ligam a busca. O `jw-mcp`
-> continua **fora de escopo**; se entrar, será como serviço separado.
+> agora tem um serviço separado em `jw-mcp/README.md`.
 > Este documento cobre apenas a busca web.
 
 ## Implementação atual
