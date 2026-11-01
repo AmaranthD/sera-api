@@ -3,6 +3,7 @@ import { ErroApi, ehSessaoExpirada } from '../api/erros'
 import { useSessao } from '../auth/contexto'
 import type { EntradaPessoa, Pessoa } from '../dominios/tipos'
 import { PessoaContext } from './contexto'
+import { selecionarPessoa } from './selecionar'
 
 const CHAVE_CACHE = 'sera.pessoa.v1'
 
@@ -68,7 +69,7 @@ export function PessoaProvider({ children }: { children: React.ReactNode }) {
     setErro(null)
     try {
       const pessoas = await api.listarPessoas()
-      const atual = pessoas[0] ?? null
+      const atual = selecionarPessoa(pessoas, idDaSessao)
       setPessoa(atual)
       if (atual) {
         guardarPessoaNoCache(idDaSessao, atual)
@@ -104,8 +105,18 @@ export function PessoaProvider({ children }: { children: React.ReactNode }) {
         return criada
       } catch (falha) {
         if (falha instanceof ErroApi && falha.status === 409) {
+          if (idDaSessao) {
+            try {
+              const existente = await api.obterPessoa(idDaSessao)
+              setPessoa(existente)
+              guardarPessoaNoCache(idDaSessao, existente)
+              return existente
+            } catch {
+              // Sem a pessoa direta (RLS/404), tenta a lista abaixo.
+            }
+          }
           const pessoas = await api.listarPessoas()
-          const existente = pessoas[0]
+          const existente = selecionarPessoa(pessoas, idDaSessao)
           if (existente) {
             setPessoa(existente)
             if (idDaSessao) guardarPessoaNoCache(idDaSessao, existente)

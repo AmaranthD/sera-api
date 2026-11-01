@@ -34,6 +34,22 @@ describe('ClienteHttp', () => {
     expect(resposta[0]?.nome).toBe('Maria')
   })
 
+  it('pede para o navegador não cachear a resposta', async () => {
+    const espiao = vi.fn().mockResolvedValue(
+      new Response('[]', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', espiao)
+    try {
+      await cliente().json('/pessoas')
+      expect(espiao.mock.calls[0]?.[1]).toMatchObject({ cache: 'no-store' })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('renova o token uma vez e repete o pedido após 401', async () => {
     const autorizacoes: string[] = []
     const renovar = vi.fn(async () => 'token-novo')

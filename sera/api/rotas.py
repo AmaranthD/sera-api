@@ -165,7 +165,16 @@ async def criar_pessoa(
 
 
 @router.get("/pessoas")
-async def listar_pessoas(banco: DependenciaBanco):
+async def listar_pessoas(
+    banco: DependenciaBanco,
+    usuario: DependenciaUsuario,
+):
+    # Com auth, a resposta é sempre a pessoa do token. Não confie só no RLS
+    # nem devolva a lista inteira: um cliente antigo/cache poderia pegar o
+    # perfil de outra conta.
+    if usuario is not None:
+        pessoa = await banco.obter_pessoa(usuario.id)
+        return [pessoa] if pessoa is not None else []
     return await banco.listar_pessoas()
 
 

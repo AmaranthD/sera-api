@@ -67,6 +67,7 @@ export class ClienteHttp {
 
     try {
       return await fetch(`${this.baseUrl}${caminho}`, {
+        cache: 'no-store',
         method: opcoes.metodo ?? 'GET',
         headers: cabecalhos,
         body: opcoes.corpo === undefined ? undefined : JSON.stringify(opcoes.corpo),

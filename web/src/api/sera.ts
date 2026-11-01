@@ -38,6 +38,10 @@ export class ApiSera {
     return this.http.json<Pessoa[]>('/pessoas')
   }
 
+  obterPessoa(pessoaId: string): Promise<Pessoa> {
+    return this.http.json<Pessoa>(`/pessoas/${encodeURIComponent(pessoaId)}`)
+  }
+
   criarPessoa(entrada: EntradaPessoa): Promise<Pessoa> {
     return this.http.json<Pessoa>('/pessoas', {
       metodo: 'POST',

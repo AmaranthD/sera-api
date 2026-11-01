@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Callable
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..prompt import carregar_personality
@@ -44,6 +44,14 @@ def criar_app(
     personality = carregar_personality(config.personality_path)
 
     app = FastAPI(title="Sera", version="0.3.0")
+
+    @app.middleware("http")
+    async def sem_cache(request: Request, call_next):
+        resposta = await call_next(request)
+        if "cache-control" not in resposta.headers:
+            resposta.headers["cache-control"] = "no-store"
+        return resposta
+
     app.state.config = config
     app.state.banco = banco_local
     app.state.banco_fabrica = fabrica

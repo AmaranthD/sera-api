@@ -99,6 +99,27 @@ async def test_pessoa_vem_do_sub_do_token(cliente):
     assert negada.status_code == 403
 
 
+async def test_listar_pessoas_com_auth_devolve_so_a_propria(cliente):
+    for token, pessoa_id, nome in (
+        ("token-maria", "maria", "Maria"),
+        ("token-joao", "joao", "João"),
+    ):
+        criada = await cliente.post(
+            "/pessoas",
+            headers=_autorizacao(token),
+            json={"nome": nome, "faixa_etaria": "adulto"},
+        )
+        assert criada.status_code == 201, criada.text
+        assert criada.json()["id"] == pessoa_id
+
+    resposta = await cliente.get(
+        "/pessoas", headers=_autorizacao("token-maria")
+    )
+
+    assert resposta.status_code == 200
+    assert [pessoa["id"] for pessoa in resposta.json()] == ["maria"]
+
+
 async def test_chat_nao_aceita_pessoa_id_de_outra_pessoa(cliente):
     await cliente.post(
         "/pessoas",
