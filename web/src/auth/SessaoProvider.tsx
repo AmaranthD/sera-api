@@ -57,7 +57,7 @@ export function SessaoProvider({ ambiente, children }: Props) {
       obterToken,
       renovarToken,
     })
-    return new ApiSera(http)
+    return new ApiSera(http, ambiente.apiUrl)
   }, [ambiente.apiUrl, obterToken, renovarToken])
 
   const entrarComEmail = useCallback(

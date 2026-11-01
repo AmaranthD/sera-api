@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ehSessaoExpirada, ErroApi } from '../api/erros'
+import { aquecerApi } from '../api/aquecimento'
 import type { EventoChat } from '../dominios/tipos'
 import type { Conversa, Mensagem } from '../dominios/tipos'
 import { normalizarMensagem } from '../dominios/texto'
@@ -325,8 +326,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setErro(null)
     setTextoParaReenviar(null)
     mudarStatus('ocioso')
+    void aquecerApi(api)
     navegar('/')
-  }, [mudarStatus, navegar])
+  }, [api, mudarStatus, navegar])
 
   const selecionarConversa = useCallback(
     (id: string) => {

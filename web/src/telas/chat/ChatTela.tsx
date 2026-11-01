@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { aquecerApi } from '../../api/aquecimento'
+import { useSessao } from '../../auth/contexto'
 import { useChat } from '../../chat/contexto'
 import { usePessoa } from '../../pessoa/contexto'
 import { iniciais, tituloDaConversa } from '../../dominios/texto'
@@ -27,10 +29,19 @@ export function ChatTela() {
     limparErro,
   } = useChat()
   const { pessoa } = usePessoa()
+  const { api } = useSessao()
   const online = useOnline()
 
   const [drawerAberto, setDrawerAberto] = useState(false)
   const [rascunho, setRascunho] = useState('')
+
+  useEffect(() => {
+    const aoVoltar = () => {
+      if (document.visibilityState === 'visible') void aquecerApi(api)
+    }
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => document.removeEventListener('visibilitychange', aoVoltar)
+  }, [api])
 
   const ocupado = status === 'enviando' || status === 'transmitindo'
   const titulo = conversaAtual

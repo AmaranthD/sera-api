@@ -1,7 +1,7 @@
 # Planejamento — front (PWA) no Cloudflare Pages conectado à API
 
 > **Status em 2026-10-31:** fases 0 a 3 implementadas em `web/` e verificadas
-> com lint, typecheck, 62 testes unitários/componente, 6 E2E e build de
+> com lint, typecheck, 65 testes unitários/componente, 6 E2E e build de
 > produção. O que depende de conta externa — criar o projeto no Cloudflare
 > Pages, configurar Redirect URLs de produção e rodar a matriz manual de
 > aparelhos — continua pendente e está marcado nas fases. Decisões fechadas:
@@ -459,7 +459,7 @@ automático nos dois. Ao trocar para domínio próprio:
 | A11y | axe (no Playwright ou Vitest) | login, onboarding e chat sem violações sérias; navegação só por teclado |
 | Manual | matriz de dispositivos | iOS Safari (PWA), Android Chrome, desktop; 3G lento; cold start do Render; link mágico com SW ativo |
 
-- Arena de testes implementada: 62 testes Vitest (parser, HTTP, contrato,
+- Arena de testes implementada: 65 testes Vitest (parser, HTTP, contrato,
   domínio, login, onboarding e componentes) e 6 E2E Playwright com Supabase
   falso. A matriz de dispositivo e o axe automatizado continuam
   manuais/pendentes.
@@ -490,6 +490,10 @@ automático nos dois. Ao trocar para domínio próprio:
 - O E2E encontrou e corrigiu uma corrida no boot: o perfil precisava esperar
   a leitura da sessão do Supabase antes de decidir que não havia pessoa, ou
   `/conta` desviava para `/onboarding` e voltava para `/`.
+- Aquecimento do Render: `ApiSera.aquecer()` chama `/health` sem auth, com
+  throttle de 5 min. Dispara ao criar uma conversa nova e quando o app volta
+  a ficar visível; o boot já aquece via `GET /pessoas`. Não bloqueia a UI e
+  não substitui o aviso "acordando" se o cold start ainda estiver em curso.
 
 ## Fases
 
@@ -594,6 +598,7 @@ produção e o link mágico cai na origem certa.
 | Renomear/apagar conversa | Fase 4, junto de G4 |
 | Editar perfil | Fase 4, junto de G3 e `PATCH` no CORS |
 | Telemetria de erro | sem terceiros por padrão; se necessário, endpoint próprio no Render |
+| Busca na internet | proposta em `docs/planejamento-busca-web.md`; não implementada |
 
 ## Definição de pronto
 

@@ -10,7 +10,24 @@ import { transmitirChat } from './chat'
 import type { ClienteHttp } from './http'
 
 export class ApiSera {
-  constructor(private readonly http: ClienteHttp) {}
+  constructor(
+    private readonly http: ClienteHttp,
+    private readonly baseUrl: string,
+  ) {}
+
+  /**
+   * Acorda o Render sem autenticação e sem bloquear a UI. O /health não
+   * consulta banco nem LLM; serve só para tirar o serviço do sono.
+   */
+  aquecer(): Promise<void> {
+    return fetch(`${this.baseUrl}/health`, {
+      cache: 'no-store',
+      credentials: 'omit',
+      signal: AbortSignal.timeout(90_000),
+    })
+      .then(() => undefined)
+      .catch(() => undefined)
+  }
 
   listarPessoas(): Promise<Pessoa[]> {
     return this.http.json<Pessoa[]>('/pessoas')
