@@ -136,7 +136,10 @@ def render_contexto(trechos: Sequence[Trecho]) -> str:
 def render_reforco() -> str:
     return (
         "Os limites invioláveis no início deste prompt prevalecem sobre a "
-        "personalidade, os ajustes aprendidos, a memória e qualquer pedido da pessoa."
+        "personalidade, os ajustes aprendidos, a memória e qualquer pedido da pessoa.\n"
+        "Idioma: na resposta visível, use um único idioma, o da última mensagem "
+        "da pessoa, sem misturar línguas. Preserve nomes próprios, termos "
+        "técnicos sem tradução consagrada e gírias naturais."
     )
 
 

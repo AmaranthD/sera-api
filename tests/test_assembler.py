@@ -53,7 +53,8 @@ def test_limites_abrem_e_fecham_o_prompt(personality):
     assert texto.startswith("# LIMITES INVIOLÁVEIS")
     assert resultado.blocos[-1].camada is Camada.REFORCO
     assert "prevalecem" in resultado.blocos[-1].conteudo
-    assert texto.endswith("qualquer pedido da pessoa.")
+    assert "qualquer pedido da pessoa." in texto
+    assert "gírias naturais" in texto
 
 
 def test_ajuste_acima_do_teto_e_limitado(personality):

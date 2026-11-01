@@ -53,3 +53,10 @@ def test_titulos_das_camadas(personality):
     assert titulos[Camada.AJUSTES] == "# AJUSTES APRENDIDOS"
     assert titulos[Camada.MEMORIA] == "# SOBRE A PESSOA"
     assert titulos[Camada.REFORCO] == "# LEMBRETE FINAL"
+
+
+def test_reforco_exige_um_unico_idioma(personality):
+    texto = cenarios.adulto_padrao(personality).render()
+    assert "use um único idioma" in texto
+    assert "sem misturar línguas" in texto
+    assert "gírias naturais" in texto
