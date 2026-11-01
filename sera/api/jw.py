@@ -122,7 +122,15 @@ class ClienteJW:
                 resposta.status_code in (502, 503, 504)
                 and tentativa < tentativas - 1
             ):
-                await anyio.sleep(1.5 * (tentativa + 1))
+                # 502 no Render quase sempre é instância acordando ou
+                # reiniciando: espera o health voltar e tenta de novo.
+                self._aquecido_em = None
+                try:
+                    await self.aquecer(
+                        limite=max(10.0, min(45.0, timeout))
+                    )
+                except JWIndisponivel:
+                    pass
                 continue
             break
 

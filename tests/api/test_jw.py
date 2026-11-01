@@ -313,13 +313,14 @@ async def test_cliente_jw_aquece_e_reaproveita_o_cache():
 
 
 async def test_cliente_jw_repete_502_do_render():
-    respostas = [
-        httpx.Response(502, text="<html>subindo</html>"),
-        httpx.Response(200, json=_resposta()),
-    ]
+    respostas = [httpx.Response(502, text="<html>subindo</html>")]
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return respostas.pop(0)
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok"})
+        if respostas:
+            return respostas.pop(0)
+        return httpx.Response(200, json=_resposta())
 
     cliente = ClienteJW(_config(), transporte=httpx.MockTransport(handler))
     resposta = await cliente.executar("search_bible_books", {"query": "matthew"})
