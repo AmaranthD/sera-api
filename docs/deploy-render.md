@@ -143,6 +143,9 @@ pesquisa nas publicações e sempre devolve a lista de fontes no fim.
 > health-check no `sera-jw` e espera ele acordar antes de chamar o modelo
 > (até 60 s). Se o Render devolver `502` no meio de um redeploy, o cliente
 > JW tenta de novo automaticamente.
+>
+> O `sera-jw` está com `autoDeploy: false`: pushes na API não o reiniciam.
+> Quando `jw-mcp/` mudar, dispare o deploy dele manualmente no dashboard.
 
 ### Modelo do LLM
 

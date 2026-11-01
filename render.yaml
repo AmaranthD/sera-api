@@ -83,7 +83,9 @@ services:
     dockerfilePath: ./jw-mcp/Dockerfile
     dockerContext: ./jw-mcp
     healthCheckPath: /health
-    autoDeploy: true
+    # O jw-mcp muda raramente. Sem autoDeploy, um push na API não reinicia
+    # o JW (e não derruba quem está usando o modo JW no meio).
+    autoDeploy: false
     envVars:
       - key: MCP_BASE_URL
         sync: false
