@@ -65,6 +65,7 @@ class FakeLLM:
         self.temperatura: float | None = None
         self.max_tokens: int | None = None
         self.ferramentas: list[dict] | None = None
+        self.escolha_ferramenta: str | None = None
         self.chamadas_recebidas = 0
 
     async def stream(
@@ -74,11 +75,13 @@ class FakeLLM:
         temperatura: float,
         max_tokens: int,
         ferramentas: Sequence[Mapping] | None = None,
+        escolha_ferramenta: str | None = None,
     ) -> AsyncIterator[Delta | Ferramenta | Fim]:
         self.mensagens = [dict(mensagem) for mensagem in mensagens]
         self.temperatura = temperatura
         self.max_tokens = max_tokens
         self.ferramentas = list(ferramentas) if ferramentas else None
+        self.escolha_ferramenta = escolha_ferramenta
         self.chamadas_recebidas += 1
 
         if self.falhar_antes:

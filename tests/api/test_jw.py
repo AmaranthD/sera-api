@@ -254,3 +254,45 @@ async def test_ferramenta_jw_recusa_nome_desconhecido():
         await executar_ferramenta(
             "jw", '{"ferramenta": "inventada"}', ContextoFerramentas(jw=FakeJW())
         )
+
+
+async def test_ultima_rodada_proibe_novas_ferramentas(config):
+    fake = FakeLLM(chunks=["Resposta final."])
+    jw = FakeJW("Mateus 6:34")
+    fake.chamadas = [
+        ChamadaFerramenta(
+            id="call_1",
+            nome="jw",
+            argumentos='{"ferramenta": "get_bible_verse", "book": 40, '
+            '"chapter": 6, "verse": "34"}',
+        )
+    ]
+    app = criar_app(
+        replace(
+            config,
+            jw_api_url="https://jw.test/api",
+            jw_api_key="chave",
+            jw_max_rodadas=1,
+        ),
+        llm=fake,
+        jw=jw,
+    )
+    transporte = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transporte, base_url="http://test"
+    ) as cliente:
+        await criar_pessoa(cliente)
+        resposta = await cliente.post(
+            "/chat",
+            json={
+                "pessoa_id": "maria",
+                "mensagem": "o que diz Mateus 6:34?",
+                "fonte": "jw",
+            },
+        )
+
+    assert resposta.status_code == 200
+    assert fake.chamadas_recebidas == 2
+    # A última rodada mantém os esquemas, mas com tool_choice="none".
+    assert fake.ferramentas is not None
+    assert fake.escolha_ferramenta == "none"

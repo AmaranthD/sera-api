@@ -292,3 +292,29 @@ async def test_reenvia_sem_ferramentas_se_provedor_rejeitar():
     assert "tools" in corpos[0]
     assert "tools" not in corpos[1]
     assert [e.texto for e in eventos if isinstance(e, Delta)] == ["Olá", "!"]
+
+
+async def test_envia_tool_choice_quando_pedido():
+    corpos: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        corpos.append(json.loads(request.read()))
+        return httpx.Response(
+            200, content=SSE, headers={"content-type": "text/event-stream"}
+        )
+
+    ferramenta = {"type": "function", "function": {"name": "jw"}}
+    cliente = ClienteOpenAICompat(
+        _config(), transporte=httpx.MockTransport(handler)
+    )
+    async for _ in cliente.stream(
+        [{"role": "user", "content": "oi"}],
+        temperatura=0.5,
+        max_tokens=8,
+        ferramentas=[ferramenta],
+        escolha_ferramenta="none",
+    ):
+        pass
+
+    assert corpos[0]["tools"] == [ferramenta]
+    assert corpos[0]["tool_choice"] == "none"

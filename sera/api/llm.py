@@ -71,6 +71,7 @@ class ClienteLLM(Protocol):
         temperatura: float,
         max_tokens: int,
         ferramentas: Sequence[Mapping[str, Any]] | None = None,
+        escolha_ferramenta: str | None = None,
     ) -> AsyncIterator[Evento]: ...
 
 
@@ -98,6 +99,7 @@ class ClienteGemini:
         temperatura: float,
         max_tokens: int,
         ferramentas: Sequence[Mapping[str, Any]] | None = None,
+        escolha_ferramenta: str | None = None,
     ) -> AsyncIterator[Evento]:
         tentativas = 0
         while True:
@@ -194,6 +196,7 @@ class ClienteOpenAICompat:
         temperatura: float,
         max_tokens: int,
         ferramentas: Sequence[Mapping[str, Any]] | None = None,
+        escolha_ferramenta: str | None = None,
     ) -> AsyncIterator[Evento]:
         incluir_uso = True
         usar_ferramentas = bool(ferramentas)
@@ -207,6 +210,7 @@ class ClienteOpenAICompat:
                     max_tokens,
                     incluir_uso,
                     ferramentas if usar_ferramentas else None,
+                    escolha_ferramenta,
                 ):
                     if isinstance(evento, (Delta, Ferramenta)):
                         emitido = True
@@ -231,6 +235,7 @@ class ClienteOpenAICompat:
         max_tokens: int,
         incluir_uso: bool,
         ferramentas: Sequence[Mapping[str, Any]] | None,
+        escolha_ferramenta: str | None = None,
     ) -> AsyncIterator[Evento]:
         config = self._config
         payload: dict = {
@@ -244,6 +249,8 @@ class ClienteOpenAICompat:
             payload["stream_options"] = {"include_usage": True}
         if ferramentas:
             payload["tools"] = [dict(ferramenta) for ferramenta in ferramentas]
+            if escolha_ferramenta:
+                payload["tool_choice"] = escolha_ferramenta
 
         cabecalhos = {
             "Accept": "text/event-stream",

@@ -138,3 +138,32 @@ def test_esquemas_modo_jw_inclui_jw_e_memoria():
         for item in esquemas(busca=False, aprendizado=True, jw=True)
     }
     assert nomes == {"jw", "lembrar", "ajustar_preferencia", "esquecer"}
+
+
+def test_ferramentas_jw_para_filtra_por_assunto():
+    from sera.api.ferramentas import ferramentas_jw_para
+
+    biblia = {
+        "search_bible_books",
+        "get_bible_verse",
+        "get_verse_with_study",
+        "get_bible_verse_url",
+    }
+    assert set(ferramentas_jw_para("estou ansioso")) == biblia
+    apostila = set(ferramentas_jw_para("quero a apostila desta semana"))
+    assert {"getWorkbookLinks", "getWorkbookContent"} <= apostila
+    sentinela = set(ferramentas_jw_para("o que a Sentinela diz sobre ansiedade?"))
+    assert {"getWatchtowerLinks", "getWatchtowerContent"} <= sentinela
+    assert "getWorkbookLinks" not in sentinela
+
+
+def test_esquemas_filtra_enum_jw():
+    from sera.api.ferramentas import ferramentas_jw_para
+
+    (esquema,) = esquemas(
+        jw=True,
+        jw_ferramentas=ferramentas_jw_para("ansiedade"),
+    )
+    enum = esquema["function"]["parameters"]["properties"]["ferramenta"]["enum"]
+    assert "get_bible_verse" in enum
+    assert "getWorkbookLinks" not in enum

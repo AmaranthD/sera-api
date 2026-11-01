@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import re
 import unicodedata
@@ -346,6 +347,8 @@ ferramenta `jw`.
 - Se o texto vier em inglês (o acervo do serviço é majoritariamente em
   inglês), traduza a citação para português e diga que foi traduzida,
   mantendo o link original.
+- Escreva a resposta inteira em português; não deixe termos ou frases em
+  inglês no meio do texto.
 - Termine sempre com uma seção `## Fontes` com um link Markdown para cada
   página ou arquivo consultado. Repita apenas os links que apareceram nos
   resultados da ferramenta.
@@ -400,13 +403,17 @@ class ContextoFerramentas:
 
 
 def esquemas(
-    *, busca: bool = False, aprendizado: bool = False, jw: bool = False
+    *,
+    busca: bool = False,
+    aprendizado: bool = False,
+    jw: bool = False,
+    jw_ferramentas: Sequence[str] | None = None,
 ) -> list[dict]:
     lista: list[dict] = []
     if busca:
         lista.append(ESQUEMA_PESQUISAR_WEB)
     if jw:
-        lista.append(ESQUEMA_JW)
+        lista.append(_esquema_jw(jw_ferramentas))
     if aprendizado:
         lista.extend((ESQUEMA_LEMBRAR, ESQUEMA_AJUSTAR, ESQUEMA_ESQUECER))
     return lista
@@ -976,3 +983,42 @@ def extrair_urls_jw(texto: str) -> list[str]:
 
 def titulo_fonte_jw(ferramenta: str) -> str:
     return _TITULO_FONTE_JW.get(ferramenta, "JW")
+
+
+_FERRAMENTAS_BIBLIA = (
+    "search_bible_books",
+    "get_bible_verse",
+    "get_verse_with_study",
+    "get_bible_verse_url",
+)
+
+_TERMOS_APOSTILA = ("apostila", "clm", "mwb", "reuniao", "ministerio")
+_TERMOS_SENTINELA = ("sentinela", "watchtower", "estudo da semana")
+_TERMOS_VIDEO = ("video", "legenda", "cantico")
+
+
+def ferramentas_jw_para(mensagem: str) -> list[str]:
+    """Ferramentas JW que fazem sentido para a mensagem.
+
+    Sem palavras-chave de publicação, ficam só as ferramentas bíblicas. Isso
+    evita o modelo gastar rodadas com a apostila quando a pessoa só quer um
+    texto ou um princípio sobre um tema.
+    """
+    texto = _normalizar_texto(mensagem)
+    permitidas = list(_FERRAMENTAS_BIBLIA)
+    if any(termo in texto for termo in _TERMOS_APOSTILA):
+        permitidas.extend(("getWorkbookLinks", "getWorkbookContent"))
+    if any(termo in texto for termo in _TERMOS_SENTINELA):
+        permitidas.extend(("getWatchtowerLinks", "getWatchtowerContent"))
+    if any(termo in texto for termo in _TERMOS_VIDEO):
+        permitidas.append("get_jw_captions")
+    return permitidas
+
+
+def _esquema_jw(permitidas: Sequence[str] | None = None) -> dict:
+    if not permitidas:
+        return ESQUEMA_JW
+    esquema = copy.deepcopy(ESQUEMA_JW)
+    enum = esquema["function"]["parameters"]["properties"]["ferramenta"]["enum"]
+    enum[:] = [nome for nome in enum if nome in permitidas]
+    return esquema

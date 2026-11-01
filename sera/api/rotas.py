@@ -53,6 +53,7 @@ from .ferramentas import (
     esquemas,
     executar_ferramenta,
     extrair_urls_jw,
+    ferramentas_jw_para,
     titulo_fonte_jw,
 )
 from .jw import JWIndisponivel
@@ -602,6 +603,7 @@ async def _preparar_ferramentas(
         busca=busca is not None and tool_calling,
         aprendizado=aprendizado,
         jw=jw,
+        jw_ferramentas=ferramentas_jw_para(mensagem) if modo_jw else None,
     )
     if jw:
         system = f"{system}\n\n{INSTRUCAO_JW}"
@@ -833,9 +835,9 @@ async def _fluxo_com_ferramentas(
                 + "\n\n".join(extras)
             )
 
-    # Última rodada: sem ferramentas, para o modelo fechar a resposta com o
-    # que já foi encontrado. Tirar as instruções do system evita que o modelo
-    # tente chamar algo que não existe mais.
+    # Última rodada: mantém os esquemas (para o modelo não inventar um
+    # formato de chamada), mas proíbe novas ferramentas. Sem isso o MiniMax
+    # tenta chamar de novo e vaza a marcação interna como texto.
     conteudo = f"{conversa[0].get('content') or ''}"
     for instrucao in (INSTRUCAO_BUSCA, INSTRUCAO_MEMORIA, INSTRUCAO_JW):
         conteudo = conteudo.replace(instrucao, "")
@@ -844,7 +846,8 @@ async def _fluxo_com_ferramentas(
         conversa,
         temperatura=config.temperatura,
         max_tokens=config.max_tokens,
-        ferramentas=None,
+        ferramentas=ferramentas,
+        escolha_ferramenta="none",
     ):
         if not isinstance(evento, Ferramenta):
             yield evento
