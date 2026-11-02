@@ -315,3 +315,20 @@ async def test_editar_titulo_nao_reenvia_lembrete(config, monkeypatch):
         )
         await agenda.disparar_lembretes(app.state.banco_admin, config)
         assert len(enviados) == 2
+
+
+def test_validar_chaves_rejeita_privada_em_formato_errado(config):
+    import base64
+    from dataclasses import replace
+
+    from sera.api.webpush import validar_chaves
+
+    publica = base64.urlsafe_b64encode(b"\x04" + b"\x00" * 64).decode().rstrip("=")
+    with pytest.raises(ValueError, match="VAPID_PRIVATE_KEY"):
+        validar_chaves(
+            replace(
+                config,
+                vapid_public_key=publica,
+                vapid_private_key="chave-privada-em-pem",
+            )
+        )

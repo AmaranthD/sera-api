@@ -20,6 +20,7 @@ from .jobs import GerenciadorJobs
 from .jw import ClienteJW
 from .llm import ClienteGemini, ClienteLLM, ClienteOpenAICompat
 from .rotas import router
+from .webpush import validar_chaves
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,11 @@ def criar_app(
     jw: ClienteJW | None = None,
 ) -> FastAPI:
     config = config or Config.de_env()
+    if config.notificacoes_ativas:
+        try:
+            validar_chaves(config)
+        except ValueError as erro:
+            logger.warning("Web Push configurado, mas inválido: %s", erro)
 
     fabrica: FabricaBanco | None = None
     banco_local: Banco | None = None

@@ -62,6 +62,15 @@ def _enviar_sincrono(
         resposta = getattr(erro, "response", None)
         status = getattr(resposta, "status_code", None)
         raise FalhaPush(str(erro), status=status) from erro
+    except ValueError as erro:
+        # py_vapid só entende a chave privada em base64url (32 bytes) ou
+        # DER. PEM colado no painel com quebras literais cai aqui.
+        raise NotificacoesIndisponiveis(
+            "VAPID_PRIVATE_KEY inválida: use a chave privada em base64url "
+            "(32 bytes) ou DER"
+        ) from erro
+    except Exception as erro:
+        raise FalhaPush(str(erro)) from erro
 
 
 async def enviar_push(
@@ -121,3 +130,38 @@ def payload_mensagem(
         "conversa_id": conversa_id,
         "resposta_id": resposta_id,
     }
+
+
+def validar_chaves(config: Config) -> None:
+    """Confere o formato das chaves VAPID antes de tentar enviar."""
+    import base64
+
+    publica = config.vapid_public_key or ""
+    privada = config.vapid_private_key or ""
+    try:
+        bruta = base64.urlsafe_b64decode(
+            publica + "=" * (-len(publica) % 4)
+        )
+    except Exception as erro:
+        raise ValueError("VAPID_PUBLIC_KEY não é base64url válida") from erro
+    if len(bruta) != 65 or bruta[0] != 4:
+        raise ValueError(
+            "VAPID_PUBLIC_KEY inválida: espere 65 bytes começando em 0x04"
+        )
+
+    try:
+        chave = base64.urlsafe_b64decode(
+            privada + "=" * (-len(privada) % 4)
+        )
+    except Exception as erro:
+        raise ValueError("VAPID_PRIVATE_KEY não é base64url válida") from erro
+    if len(chave) == 32:
+        return
+    try:
+        from cryptography.hazmat.primitives import serialization
+
+        serialization.load_der_private_key(chave, password=None)
+    except Exception as erro:
+        raise ValueError(
+            "VAPID_PRIVATE_KEY inválida: espere 32 bytes em base64url ou DER"
+        ) from erro
