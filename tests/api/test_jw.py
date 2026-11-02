@@ -297,6 +297,11 @@ async def test_ultima_rodada_proibe_novas_ferramentas(config):
     # A última rodada mantém os esquemas, mas com tool_choice="none".
     assert fake.ferramentas is not None
     assert fake.escolha_ferramenta == "none"
+    assert "Não chame ferramentas" in system_prompt(fake)
+    assert (
+        "https://www.jw.org/finder?wtlocale=T&prefer=lang"
+        "&bible=40006034&pub=nwtsty"
+    ) in system_prompt(fake)
 
 
 async def test_cliente_jw_aquece_e_reaproveita_o_cache():

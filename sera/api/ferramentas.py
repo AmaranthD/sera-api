@@ -352,8 +352,8 @@ ferramenta `jw`.
 - Se o texto vier em inglês (o acervo do serviço é majoritariamente em
   inglês), traduza a citação para português e diga que foi traduzida,
   mantendo o link original.
-- Escreva a resposta inteira em português; não deixe termos ou frases em
-  inglês no meio do texto.
+- Escreva a resposta inteira em português do Brasil; não deixe termos ou
+  frases em inglês nem caracteres de outros idiomas no meio do texto.
 - Termine sempre com uma seção `## Fontes` com **um único link em
   Markdown**: o da página principal consultada (o versículo em jw.org ou a
   publicação). Não liste artigos de estudo, notas, referências cruzadas nem

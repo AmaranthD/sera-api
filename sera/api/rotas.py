@@ -925,12 +925,31 @@ async def _fluxo_com_ferramentas(
             )
 
     # Última rodada: mantém os esquemas (para o modelo não inventar um
-    # formato de chamada), mas proíbe novas ferramentas. Sem isso o MiniMax
-    # tenta chamar de novo e vaza a marcação interna como texto.
+    # formato de chamada), mas proíbe novas ferramentas. Também removemos a
+    # instrução do modo JW: se ela fica, o MiniMax tenta chamar de novo e
+    # vaza a marcação interna como texto.
     conteudo = f"{conversa[0].get('content') or ''}"
-    for instrucao in (INSTRUCAO_BUSCA, INSTRUCAO_MEMORIA, INSTRUCAO_JW):
+    for instrucao in (
+        INSTRUCAO_BUSCA,
+        INSTRUCAO_MEMORIA,
+        INSTRUCAO_JW,
+        INSTRUCAO_JW_MODO,
+    ):
         conteudo = conteudo.replace(instrucao, "")
-    conversa[0]["content"] = conteudo.strip()
+    conversa[0]["content"] = (
+        f"{conteudo.strip()}\n\n"
+        "## Agora\n"
+        "Responda com o conteúdo já consultado, em português do Brasil, "
+        "sem palavras ou caracteres de outros idiomas. Não chame ferramentas."
+    )
+    if uma_fonte and fonte_principal:
+        titulo = fonte_principal.get("titulo") or "Fonte"
+        url = fonte_principal.get("url") or ""
+        if url:
+            conversa[0]["content"] += (
+                "\n\nTermine com uma seção `## Fontes` e apenas este link em "
+                f"Markdown: [{titulo}]({url})."
+            )
     async for evento in llm.stream(
         conversa,
         temperatura=config.temperatura,
