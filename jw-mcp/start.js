@@ -72,7 +72,42 @@ function exigirApiKey(req, res, next) {
   next()
 }
 
-app.get('/api/tools', exigirApiKey, (_req, res) => {
+// O facade REST não pode virar proxy de scraping sem limite. Protege a
+// chave compartilhada e evita que um bug da Sera derrube o serviço.
+const LIMITE_JANELA_MS = 60_000
+const LIMITE_POR_JANELA = 60
+const acessosPorIp = new Map()
+
+function limitarRequisicoes(req, res, next) {
+  const agora = Date.now()
+  const ip = req.ip || req.socket?.remoteAddress || 'desconhecido'
+  const registro = acessosPorIp.get(ip)
+  if (!registro || agora - registro.inicio >= LIMITE_JANELA_MS) {
+    acessosPorIp.set(ip, { inicio: agora, total: 1 })
+    next()
+    return
+  }
+  registro.total += 1
+  if (registro.total > LIMITE_POR_JANELA) {
+    res.status(429).json({ erro: 'muitas requisições; tente em instantes' })
+    return
+  }
+  next()
+}
+
+const limpezaAcessos = setInterval(() => {
+  const agora = Date.now()
+  for (const [ip, registro] of acessosPorIp) {
+    if (agora - registro.inicio >= LIMITE_JANELA_MS) {
+      acessosPorIp.delete(ip)
+    }
+  }
+}, LIMITE_JANELA_MS)
+limpezaAcessos.unref()
+
+app.disable('x-powered-by')
+
+app.get('/api/tools', limitarRequisicoes, exigirApiKey, (_req, res) => {
   res.json({
     ferramentas: ferramentas.map((ferramenta) => ({
       nome: ferramenta.name,
@@ -82,7 +117,7 @@ app.get('/api/tools', exigirApiKey, (_req, res) => {
   })
 })
 
-app.post('/api/tool', exigirApiKey, async (req, res) => {
+app.post('/api/tool', limitarRequisicoes, exigirApiKey, async (req, res) => {
   const nome = req.body?.nome
   const argumentos = req.body?.argumentos
 
@@ -109,11 +144,10 @@ app.post('/api/tool', exigirApiKey, async (req, res) => {
     }
     res.status(404).json({ erro: `ferramenta desconhecida: ${nome}` })
   } catch (erro) {
+    // Detalhe fica só no log do servidor; não devolve caminho/stack para
+    // quem chamou o facade.
     console.error(`Falha em ${nome}:`, erro)
-    res.status(502).json({
-      erro: 'falha ao consultar o conteúdo JW',
-      detalhe: String(erro?.message || erro).slice(0, 300),
-    })
+    res.status(502).json({ erro: 'falha ao consultar o conteúdo JW' })
   }
 })
 

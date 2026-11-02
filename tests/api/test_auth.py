@@ -175,3 +175,51 @@ async def test_allowlist_de_email(config):
         assert resposta.json()["detail"] == (
             "este e-mail ainda não está liberado para usar a Sera"
         )
+
+
+async def test_mensagens_de_outra_pessoa_respondem_404(config):
+    banco = Banco(config.db_path)
+    app = criar_app(
+        config,
+        llm=FakeLLM(),
+        banco=banco,
+        autenticador=FakeAutenticador(
+            {"token-maria": "maria", "token-joao": "joao"}
+        ),
+    )
+    transporte = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transporte, base_url="http://test"
+    ) as cliente:
+        for token, pessoa_id, nome in (
+            ("token-maria", "maria", "Maria"),
+            ("token-joao", "joao", "João"),
+        ):
+            resposta = await cliente.post(
+                "/pessoas",
+                headers=_autorizacao(token),
+                json={
+                    "id": pessoa_id,
+                    "nome": nome,
+                    "faixa_etaria": "adulto",
+                },
+            )
+            assert resposta.status_code == 201, resposta.text
+
+        conversa = await banco.criar_conversa("maria", "privada")
+        await banco.criar_mensagem(
+            conversa["id"], "user", "conteúdo privado"
+        )
+
+        intrusa = await cliente.get(
+            f"/conversas/{conversa['id']}/mensagens",
+            headers=_autorizacao("token-joao"),
+        )
+        assert intrusa.status_code == 404
+
+        propria = await cliente.get(
+            f"/conversas/{conversa['id']}/mensagens",
+            headers=_autorizacao("token-maria"),
+        )
+        assert propria.status_code == 200
+        assert propria.json()[0]["conteudo"] == "conteúdo privado"

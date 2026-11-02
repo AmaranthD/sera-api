@@ -50,11 +50,14 @@ gravar.
 ## Respostas do chat
 
 Quando um job assíncrono (`POST /chat/job`) termina, a API envia Web Push
-para todas as inscrições da pessoa: título "Sera", prévia da resposta (ou
-aviso de erro) e link para `/c/{conversa_id}`. Exige VAPID configurado e
-notificações ativadas no dispositivo (Agenda → Ativar notificações). O
-service worker não mostra a notificação quando já existe uma janela do app
-visível, para não duplicar o polling. Jobs cancelados não notificam.
+para todas as inscrições da pessoa: título "Sera", aviso de que a resposta
+chegou (ou de erro) e link para `/c/{conversa_id}`. Por privacidade, o
+conteúdo da resposta **não** aparece na tela de bloqueio; para mostrar uma
+prévia de até 140 caracteres, defina `NOTIFICACOES_PREVIEW=true`. Exige
+VAPID configurado e notificações ativadas no dispositivo (Agenda → Ativar
+notificações). O service worker não mostra a notificação quando a conversa
+já está aberta e visível, para não duplicar o polling. Jobs cancelados não
+notificam.
 
 ## Configuração
 
@@ -69,6 +72,7 @@ VAPID_PUBLIC_KEY=...
 VAPID_PRIVATE_KEY=...
 VAPID_SUBJECT=mailto:voce@exemplo.com
 NOTIFICACOES_SEGREDO=...        # inventado, longo e aleatório
+NOTIFICACOES_PREVIEW=false      # true mostra prévia da resposta no push
 SUPABASE_SERVICE_KEY=...        # só em produção (disparo entre usuários)
 ```
 

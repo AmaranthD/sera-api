@@ -84,6 +84,7 @@ class Config:
     vapid_subject: str = "mailto:contato@sera.local"
     notificacoes_segredo: str | None = None
     notificacoes_intervalo: float = 60.0
+    notificacoes_preview: bool = False
     cors_origins: tuple[str, ...] = ()
     cors_origin_regex: str | None = None
     emails_permitidos: tuple[str, ...] = ()
@@ -280,6 +281,9 @@ class Config:
             vapid_subject=texto("VAPID_SUBJECT", "mailto:contato@sera.local"),
             notificacoes_segredo=opcional("NOTIFICACOES_SEGREDO"),
             notificacoes_intervalo=numero("NOTIFICACOES_INTERVALO", 60.0),
+            notificacoes_preview=texto("NOTIFICACOES_PREVIEW", "false")
+            .lower()
+            in ("1", "true", "yes", "on"),
             cors_origins=tuple(
                 origem.strip()
                 for origem in texto("CORS_ORIGINS", "").split(",")

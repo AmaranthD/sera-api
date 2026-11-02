@@ -29,8 +29,10 @@ services:
         value: "4096"
       - key: CORS_ORIGINS
         sync: false
+      # Só o projeto sera-chat e seus previews; antes qualquer *.pages.dev
+      # passava. Para domínio próprio, defina CORS_ORIGINS exato no painel.
       - key: CORS_ORIGIN_REGEX
-        value: "https://.*\\.pages\\.dev"
+        value: '^https://([a-z0-9-]+\.)?sera-chat\.pages\.dev$'
       - key: SERA_MAX_TRECHOS
         value: "3"
       - key: SERA_MAX_CHARS_CONTEXTO
@@ -69,6 +71,8 @@ services:
         sync: false
       - key: NOTIFICACOES_INTERVALO
         value: "60"
+      - key: NOTIFICACOES_PREVIEW
+        value: "false"
       # Necessária para o disparo agendado ler a agenda de todas as pessoas
       # (o caminho normal usa o JWT do usuário e o RLS).
       - key: SUPABASE_SERVICE_KEY

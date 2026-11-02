@@ -1,6 +1,14 @@
 /* Handlers de notificação importados pelo service worker do PWA.
  * O arquivo é carregado com importScripts no sw.js gerado pelo Workbox. */
 
+// Só aceita caminho interno: nunca navega para outro domínio a partir de
+// um payload de push.
+function urlSegura(valor) {
+  if (typeof valor !== 'string') return '/agenda'
+  if (!valor.startsWith('/') || valor.startsWith('//')) return '/agenda'
+  return valor
+}
+
 self.addEventListener('push', (evento) => {
   let dados = {}
   try {
@@ -16,7 +24,7 @@ self.addEventListener('push', (evento) => {
     badge: '/icons/icon-192-v2.png',
     tag: dados.tag || undefined,
     renotify: Boolean(dados.tag),
-    data: { url: dados.url || '/agenda' },
+    data: { url: urlSegura(dados.url) },
   }
 
   evento.waitUntil(
@@ -43,7 +51,7 @@ self.addEventListener('push', (evento) => {
 
 self.addEventListener('notificationclick', (evento) => {
   evento.notification.close()
-  const url = (evento.notification.data && evento.notification.data.url) || '/agenda'
+  const url = urlSegura(evento.notification.data && evento.notification.data.url)
 
   evento.waitUntil(
     (async () => {

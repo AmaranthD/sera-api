@@ -323,7 +323,7 @@ async def test_job_envia_push_quando_resposta_fica_pronta(
     assert len(envios) == 1
     payload = envios[0]["payload"]
     assert payload["tipo"] == "mensagem"
-    assert payload["corpo"] == "Olá, Maria!"
+    assert payload["corpo"] == "Sua resposta está pronta."
     assert payload["url"] == f"/c/{trabalho['conversa_id']}"
     assert payload["tag"] == f"chat-{trabalho['resposta_id']}"
 

@@ -332,3 +332,15 @@ def test_validar_chaves_rejeita_privada_em_formato_errado(config):
                 vapid_private_key="chave-privada-em-pem",
             )
         )
+
+
+def test_payload_mensagem_so_mostra_conteudo_com_preview():
+    from sera.api.webpush import payload_mensagem
+
+    privado = payload_mensagem("c1", "r1", "Conteúdo sensível")
+    assert privado["corpo"] == "Sua resposta está pronta."
+
+    com_preview = payload_mensagem(
+        "c1", "r1", "Conteúdo sensível", preview=True
+    )
+    assert com_preview["corpo"] == "Conteúdo sensível"

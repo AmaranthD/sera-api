@@ -589,7 +589,7 @@ produção e o link mágico cai na origem certa.
 | SW servir shell velho no link mágico | login falha silenciosamente | `autoUpdate`, testar `/?code=` com SW ativo, não cachear navegação autenticada |
 | Conteúdo de conversa em cache | privacidade em dispositivo compartilhado | não cachear mensagens; só shell |
 | XSS via resposta do LLM | execução no navegador | texto puro + CSP sem `unsafe-inline`; markdown só com sanitizer |
-| `CORS_ORIGIN_REGEX` amplo | qualquer `*.pages.dev` chama a API | origem exata em produção; preview separado se necessário |
+| `CORS_ORIGIN_REGEX` amplo | qualquer `*.pages.dev` chama a API | regex restrita a `sera-chat.pages.dev` e seus previews; `CORS_ORIGINS` exato em produção |
 | Node 18 local | build não roda | Node 22 no `.nvmrc`, CI e Pages |
 | Duplicação de mensagem em retry | histórico confuso | retry sempre como nova mensagem; nunca reenviar o mesmo POST automaticamente |
 | Supabase free pausado | login/API fora | uso diário; monitorar; retenção documentada |

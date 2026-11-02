@@ -487,9 +487,17 @@ async def exportar_dados(
 
 @router.get("/conversas/{conversa_id}/mensagens")
 async def listar_mensagens(
-    conversa_id: str, request: Request, banco: DependenciaBanco
+    conversa_id: str,
+    request: Request,
+    banco: DependenciaBanco,
+    usuario: DependenciaUsuario,
 ):
-    if await banco.obter_conversa(conversa_id) is None:
+    conversa = await banco.obter_conversa(conversa_id)
+    # Não confie só no RLS/SQLite: com auth, a conversa precisa ser da
+    # própria pessoa mesmo que o id seja adivinhado.
+    if conversa is None or (
+        usuario is not None and conversa["pessoa_id"] != usuario.id
+    ):
         raise HTTPException(status_code=404, detail="conversa não encontrada")
 
     mensagens = await banco.listar_mensagens(conversa_id)
@@ -803,7 +811,11 @@ async def _notificar_resposta(
         return
 
     payload = payload_mensagem(
-        conversa_id, resposta_id, texto, erro=erro
+        conversa_id,
+        resposta_id,
+        texto,
+        erro=erro,
+        preview=config.notificacoes_preview,
     )
     for inscricao in inscricoes:
         try:

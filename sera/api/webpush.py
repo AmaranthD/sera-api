@@ -109,18 +109,23 @@ def payload_mensagem(
     texto: str,
     *,
     erro: bool = False,
+    preview: bool = False,
 ) -> dict:
-    """Notificação de uma resposta do chat assíncrono pronta."""
+    """Notificação de uma resposta do chat assíncrono pronta.
+
+    O conteúdo só aparece na notificação se `preview` estiver ligado; por
+    padrão a tela de bloqueio mostra apenas que a resposta chegou.
+    """
     trecho = " ".join(str(texto or "").split())
     if erro:
         corpo = "A Sera não conseguiu concluir a resposta. Abra para tentar."
-    elif trecho:
+    elif not preview or not trecho:
+        corpo = "Sua resposta está pronta."
+    else:
         limite = 140
         corpo = trecho[:limite].rstrip()
         if len(trecho) > limite:
             corpo = f"{corpo}…"
-    else:
-        corpo = "Sua resposta está pronta."
     return {
         "titulo": "Sera",
         "corpo": corpo,
