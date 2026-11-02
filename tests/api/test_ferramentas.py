@@ -398,3 +398,23 @@ async def test_agendar_rejeita_data_invalida():
             {"titulo": "Consulta", "inicio": "amanhã"},
             _contexto_agenda(),
         )
+
+
+@pytest.mark.parametrize(
+    "titulo",
+    ["", "por exemplo", "Compromisso de exemplo", "teste"],
+)
+async def test_agendar_exige_titulo_real(titulo):
+    contexto = _contexto_agenda()
+    resultado = await executar_ferramenta(
+        "agendar",
+        {
+            "titulo": titulo,
+            "inicio": "2026-11-25T09:00",
+            "fim": "2026-11-25T10:00",
+        },
+        contexto,
+    )
+
+    assert resultado == {"ok": False, "precisa_titulo": True}
+    assert contexto.banco.compromissos == []

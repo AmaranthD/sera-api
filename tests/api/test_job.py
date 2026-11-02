@@ -315,6 +315,10 @@ async def test_job_envia_push_quando_resposta_fica_pronta(
         await _aguardar(
             cliente, trabalho["conversa_id"], trabalho["resposta_id"]
         )
+        for _ in range(100):
+            if envios:
+                break
+            await asyncio.sleep(0.02)
 
     assert len(envios) == 1
     payload = envios[0]["payload"]
@@ -322,3 +326,40 @@ async def test_job_envia_push_quando_resposta_fica_pronta(
     assert payload["corpo"] == "Olá, Maria!"
     assert payload["url"] == f"/c/{trabalho['conversa_id']}"
     assert payload["tag"] == f"chat-{trabalho['resposta_id']}"
+
+
+async def test_job_ignora_agendamentos_duplicados(config, fake):
+    from sera.api.llm import ChamadaFerramenta
+
+    argumentos = (
+        '{"titulo": "Consulta", "inicio": "2026-11-25T09:00", '
+        '"fim": "2026-11-25T10:00"}'
+    )
+    fake.chamadas = [
+        ChamadaFerramenta(id="a", nome="agendar", argumentos=argumentos),
+        ChamadaFerramenta(id="b", nome="agendar", argumentos=argumentos),
+    ]
+    fake.chunks = ["Agendado."]
+    app = criar_app(config, llm=fake)
+    transporte = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transporte, base_url="http://test"
+    ) as cliente:
+        await criar_pessoa(cliente)
+        inicio = await cliente.post(
+            "/chat/job",
+            json={
+                "pessoa_id": "maria",
+                "mensagem": "Agende uma consulta dia 25 às 9",
+            },
+        )
+        trabalho = inicio.json()
+        _, mensagem = await _aguardar(
+            cliente, trabalho["conversa_id"], trabalho["resposta_id"]
+        )
+
+    compromissos = await app.state.banco.listar_compromissos(
+        "maria", None, None
+    )
+    assert mensagem["status"] == "completa"
+    assert [item["titulo"] for item in compromissos] == ["Consulta"]

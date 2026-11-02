@@ -44,6 +44,21 @@ _DURACAO_PADRAO_MINUTOS = 60
 _MAX_LEMBRETE_MINUTOS = 10080
 _JANELA_PADRAO_DIAS = 30
 
+# Títulos que não dizem nada sobre o compromisso: o modelo deve perguntar
+# antes de agendar em vez de gravar "Compromisso de exemplo".
+_TITULOS_GENERICOS = {
+    "exemplo",
+    "por exemplo",
+    "teste",
+    "compromisso",
+    "agendamento",
+    "compromisso de exemplo",
+    "agendamento de exemplo",
+    "novo compromisso",
+    "novo agendamento",
+    "sem titulo",
+}
+
 _VALORES_KNOB = {
     "nivel_sarcasmo": ("nenhum", "leve", "medio", "alto"),
     "formalidade": ("baixa", "media", "alta"),
@@ -511,6 +526,10 @@ INSTRUCAO_AGENDA = """\
 
 Você pode marcar, consultar e cancelar compromissos na agenda da pessoa.
 
+- Antes de `agendar`, sempre tenha um título/assunto dito pela pessoa.
+  Se ela só deu dia e hora, pergunte: "qual é o assunto do compromisso?".
+  Nunca invente nem use "por exemplo", "teste", "compromisso" ou
+  "agendamento" como título.
 - Use `agendar` quando ela pedir para marcar, agendar, reservar ou anotar
   um compromisso com data e hora. Informe `titulo` e `inicio` no formato
   `AAAA-MM-DDTHH:MM`; `fim` é opcional (uma hora depois por padrão).
@@ -519,6 +538,9 @@ Você pode marcar, consultar e cancelar compromissos na agenda da pessoa.
 - Use `cancelar_compromisso` só quando ela pedir explicitamente para
   cancelar, desmarcar ou remover um compromisso. Se não souber o id, passe
   um trecho do `titulo`.
+- Chame `agendar` uma única vez por compromisso. Não repita a chamada com
+  os mesmos dados: a primeira já marca, e a segunda só encontraria o
+  compromisso recém-criado.
 - Converta datas relativas ("hoje", "amanhã", "sexta") em datas absolutas
   usando o bloco AGORA. Se faltar a hora ou o dia, pergunte antes de
   agendar. Não invente data nem duração.
@@ -754,9 +776,9 @@ async def _agendar(
     banco, pessoa, config = _contexto_agenda(contexto)
 
     titulo = " ".join(str(dados.get("titulo") or "").split())
-    if not titulo:
-        raise FerramentaInvalida("informe o título do compromisso")
     titulo = titulo[:_TAMANHO_MAXIMO_TITULO_AGENDA].rstrip()
+    if not titulo or _normalizar_texto(titulo) in _TITULOS_GENERICOS:
+        return {"ok": False, "precisa_titulo": True}
 
     inicio = _data_da_agenda(dados.get("inicio"), config)
     fim_bruto = str(dados.get("fim") or "").strip()

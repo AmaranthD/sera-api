@@ -1354,8 +1354,20 @@ async def _executar_chamadas(
     fontes: list[dict] = []
     notas: list[str] = []
     vistos: set[str] = set()
+    assinaturas: set[tuple[str, str]] = set()
 
     for chamada in chamadas:
+        assinatura = (chamada.nome, _assinatura_argumentos(chamada.argumentos))
+        if assinatura in assinaturas:
+            # Alguns modelos repetem a mesma chamada na mesma rodada. Sem
+            # isso, a segunda criação bateria no próprio compromisso/memória
+            # criado pela primeira e a pessoa veria um conflito fantasma.
+            logger.info(
+                "ignorando chamada duplicada: %s", chamada.nome
+            )
+            continue
+        assinaturas.add(assinatura)
+
         consulta = (
             _consulta_da_chamada(chamada, momento)
             if chamada.nome == NOME_PESQUISA
@@ -1445,6 +1457,12 @@ async def _executar_chamadas(
 
 def _nota_de_ferramenta(nome: str, resultado: dict) -> str:
     if nome == NOME_AGENDAR:
+        if resultado.get("precisa_titulo"):
+            return (
+                "Antes de agendar, pergunte o título/assunto do "
+                "compromisso. Não use 'exemplo', 'teste' nem invente um "
+                "título."
+            )
         if not resultado.get("ok"):
             conflito = resultado.get("conflito") or {}
             return (
@@ -1534,6 +1552,20 @@ def _nota_de_ferramenta(nome: str, resultado: dict) -> str:
             return f"Esqueci: {esquecida.get('texto')}."
         return "Não consegui apagar essa memória."
     return ""
+
+
+def _assinatura_argumentos(argumentos: str) -> str:
+    """Chave estável para reconhecer chamadas repetidas do modelo."""
+    try:
+        dados = json.loads(argumentos or "{}")
+    except json.JSONDecodeError:
+        return str(argumentos)
+    if not isinstance(dados, dict):
+        return str(argumentos)
+    try:
+        return json.dumps(dados, sort_keys=True, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(argumentos)
 
 
 def _consulta_da_chamada(
