@@ -8,6 +8,7 @@ import httpx
 from fastapi import HTTPException
 
 from .config import Config
+from .tempo import agora_iso as agora
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +22,6 @@ class ErroBanco(Exception):
         super().__init__(detalhe)
         self.detalhe = detalhe
         self.status = status
-
-
-def agora() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
 
 
 class BancoSupabase:

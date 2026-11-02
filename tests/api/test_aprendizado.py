@@ -112,7 +112,7 @@ async def test_ajustar_recusa_valor_invalido(contexto):
 
 
 async def test_ajustar_respeita_limite(banco, contexto, monkeypatch):
-    monkeypatch.setattr("sera.api.ferramentas._MAX_AJUSTES", 1)
+    monkeypatch.setattr("sera.api.ferramentas_memoria._MAX_AJUSTES", 1)
     await executar_ferramenta(
         "ajustar_preferencia",
         '{"tipo": "apelido", "texto": "Mãe Sera"}',
@@ -180,7 +180,7 @@ async def test_lembrar_saude_aceita_pedido_explicito(banco):
 
 
 async def test_lembrar_respeita_limite(banco, contexto, monkeypatch):
-    monkeypatch.setattr("sera.api.ferramentas._MAX_MEMORIAS", 1)
+    monkeypatch.setattr("sera.api.ferramentas_memoria._MAX_MEMORIAS", 1)
     await executar_ferramenta(
         "lembrar",
         '{"texto": "Gosta de jazz", "categoria": "gostos"}',

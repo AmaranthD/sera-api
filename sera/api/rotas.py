@@ -72,7 +72,7 @@ from .llm import (
     Fim,
     Uso,
 )
-from .relogio import agora as agora_do_fuso
+from .tempo import agora as agora_do_fuso
 from .relogio import bloco_agora, normalizar_consulta
 from .schemas import (
     AjusteAtualizacao,
@@ -155,6 +155,34 @@ def _pessoa_do_usuario(
             status_code=401, detail="pessoa não identificada"
         )
     return solicitado
+
+
+def _modo_jw(config: Config, fonte: str | None) -> bool:
+    modo = fonte == "jw"
+    if modo and not (config.jw_ativa and config.llm_provider == "openai"):
+        raise HTTPException(
+            status_code=503,
+            detail="o modo JW não está disponível neste servidor",
+        )
+    return modo
+
+
+async def _conversa_do_chat(
+    banco: Banco,
+    pessoa_id: str,
+    conversa_id: str | None,
+    mensagem: str,
+) -> dict:
+    if conversa_id is not None:
+        conversa = await banco.obter_conversa(conversa_id)
+        if conversa is None or conversa["pessoa_id"] != pessoa_id:
+            raise HTTPException(
+                status_code=404, detail="conversa não encontrada"
+            )
+        return conversa
+    return await banco.criar_conversa(
+        pessoa_id, _titulo_da_mensagem(mensagem)
+    )
 
 
 @router.post("/pessoas", status_code=201)
@@ -535,12 +563,7 @@ async def chat(
     if linha_pessoa is None:
         raise HTTPException(status_code=404, detail="pessoa não encontrada")
 
-    modo_jw = corpo.fonte == "jw"
-    if modo_jw and not (config.jw_ativa and config.llm_provider == "openai"):
-        raise HTTPException(
-            status_code=503,
-            detail="o modo JW não está disponível neste servidor",
-        )
+    modo_jw = _modo_jw(config, corpo.fonte)
     if modo_jw:
         aquecer_jw = getattr(
             getattr(request.app.state, "jw", None), "aquecer", None
@@ -558,14 +581,9 @@ async def chat(
                     ),
                 ) from erro
 
-    if corpo.conversa_id is not None:
-        conversa = await banco.obter_conversa(corpo.conversa_id)
-        if conversa is None or conversa["pessoa_id"] != pessoa_id:
-            raise HTTPException(status_code=404, detail="conversa não encontrada")
-    else:
-        conversa = await banco.criar_conversa(
-            pessoa_id, _titulo_da_mensagem(corpo.mensagem)
-        )
+    conversa = await _conversa_do_chat(
+        banco, pessoa_id, corpo.conversa_id, corpo.mensagem
+    )
 
     historico = await banco.ultimas_mensagens(
         conversa["id"], config.max_history_mensagens
@@ -649,21 +667,10 @@ async def chat_job(
     if linha_pessoa is None:
         raise HTTPException(status_code=404, detail="pessoa não encontrada")
 
-    modo_jw = corpo.fonte == "jw"
-    if modo_jw and not (config.jw_ativa and config.llm_provider == "openai"):
-        raise HTTPException(
-            status_code=503,
-            detail="o modo JW não está disponível neste servidor",
-        )
-
-    if corpo.conversa_id is not None:
-        conversa = await banco.obter_conversa(corpo.conversa_id)
-        if conversa is None or conversa["pessoa_id"] != pessoa_id:
-            raise HTTPException(status_code=404, detail="conversa não encontrada")
-    else:
-        conversa = await banco.criar_conversa(
-            pessoa_id, _titulo_da_mensagem(corpo.mensagem)
-        )
+    modo_jw = _modo_jw(config, corpo.fonte)
+    conversa = await _conversa_do_chat(
+        banco, pessoa_id, corpo.conversa_id, corpo.mensagem
+    )
 
     jobs = request.app.state.jobs
     # A checagem e a criação precisam ser atômicas: dois pedidos simultâneos

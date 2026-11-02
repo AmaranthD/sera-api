@@ -52,6 +52,16 @@ export function formatarHora(iso: string): string {
   }).format(data)
 }
 
+export function formatarDiaLongo(iso: string): string {
+  const data = new Date(iso)
+  if (Number.isNaN(data.getTime())) return ''
+  return new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+  }).format(data)
+}
+
 function inicioDoDia(data: Date): number {
   return new Date(data.getFullYear(), data.getMonth(), data.getDate()).getTime()
 }

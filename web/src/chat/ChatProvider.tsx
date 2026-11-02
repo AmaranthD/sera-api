@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ehSessaoExpirada, ErroApi } from '../api/erros'
+import { ehSessaoExpirada, ErroApi, mensagemDoErro } from '../api/erros'
 import { aquecerApi } from '../api/aquecimento'
 import type { Conversa, Mensagem } from '../dominios/tipos'
 import { normalizarMensagem } from '../dominios/texto'
@@ -26,12 +26,6 @@ function idDaRota(pathname: string): string | null {
   } catch {
     return null
   }
-}
-
-function semAcentoDeErro(erro: unknown): string {
-  if (erro instanceof ErroApi) return erro.message
-  if (erro instanceof Error) return erro.message
-  return 'Não foi possível completar o pedido.'
 }
 
 interface JobAtivo {
@@ -80,7 +74,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (ehSessaoExpirada(falha)) {
         await sair()
       } else if (montadoRef.current) {
-        setErro(semAcentoDeErro(falha))
+        setErro(mensagemDoErro(falha))
       }
     } finally {
       if (montadoRef.current) setCarregandoConversas(false)
@@ -121,7 +115,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         }
         if (conversaIdRef.current !== id) return
         setMensagens([])
-        setErro(semAcentoDeErro(falha))
+        setErro(mensagemDoErro(falha))
       } finally {
         if (conversaIdRef.current === id) {
           setCarregandoMensagens(false)
@@ -232,7 +226,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         if (falha instanceof ErroApi && falha.status === 404) {
           setErro('Não encontramos a resposta desta conversa.')
         } else {
-          setErro(semAcentoDeErro(falha))
+          setErro(mensagemDoErro(falha))
         }
         setTextoParaReenviar(textoEnviadoRef.current || null)
         mudarStatus('erro')
@@ -351,7 +345,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             return mensagem
           }),
         )
-        setErro(semAcentoDeErro(falha))
+        setErro(mensagemDoErro(falha))
         setTextoParaReenviar(texto)
         mudarStatus('erro')
       } finally {

@@ -18,75 +18,17 @@ import {
 } from '../../notificacoes/push'
 import { useInstalacao } from '../../pwa/usePwa'
 import { usePessoa } from '../../pessoa/contexto'
+import { formatarDiaLongo, formatarHora } from '../../dominios/texto'
+import {
+  LEMBRETES,
+  deEntradaLocal,
+  fimPadrao,
+  novoFormulario,
+  paraEntradaLocal,
+  rotuloLembrete,
+  type Formulario,
+} from './formulario'
 import estilos from './Agenda.module.css'
-
-const LEMBRETES = [0, 5, 10, 15, 30, 60, 120, 1440]
-
-function paraEntradaLocal(iso: string): string {
-  const data = new Date(iso)
-  if (Number.isNaN(data.getTime())) return ''
-  const local = new Date(data.getTime() - data.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 16)
-}
-
-function deEntradaLocal(valor: string): string {
-  return new Date(valor).toISOString()
-}
-
-function inicioPadrao(): string {
-  const agora = new Date()
-  agora.setMinutes(agora.getMinutes() + (15 - (agora.getMinutes() % 15 || 15)))
-  agora.setSeconds(0, 0)
-  return paraEntradaLocal(agora.toISOString())
-}
-
-function fimPadrao(inicio: string): string {
-  const data = new Date(deEntradaLocal(inicio))
-  data.setHours(data.getHours() + 1)
-  return paraEntradaLocal(data.toISOString())
-}
-
-function formatarDia(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'long',
-  })
-}
-
-function formatarHora(iso: string): string {
-  return new Date(iso).toLocaleTimeString('pt-BR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function rotuloLembrete(minutos: number): string {
-  if (minutos === 0) return 'na hora'
-  if (minutos < 60) return `${minutos} min antes`
-  if (minutos === 60) return '1 hora antes'
-  if (minutos === 1440) return '1 dia antes'
-  return `${minutos / 60} horas antes`
-}
-
-interface Formulario {
-  titulo: string
-  descricao: string
-  inicio: string
-  fim: string
-  lembrete: number
-}
-
-function novoFormulario(): Formulario {
-  const inicio = inicioPadrao()
-  return {
-    titulo: '',
-    descricao: '',
-    inicio,
-    fim: fimPadrao(inicio),
-    lembrete: 10,
-  }
-}
 
 export function Agenda() {
   const { api, sair } = useSessao()
@@ -473,7 +415,7 @@ export function Agenda() {
               {dias.map(([chave, itens]) => (
                 <div key={chave} className={estilos.dia}>
                   <h3 className={estilos.diaTitulo}>
-                    {itens[0] ? formatarDia(itens[0].inicio) : ''}
+                    {itens[0] ? formatarDiaLongo(itens[0].inicio) : ''}
                   </h3>
                   <ul className={estilos.lista}>
                     {itens.map((item) => (

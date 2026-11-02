@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime, timedelta
-from zoneinfo import ZoneInfo
-
 _DIAS = (
     "segunda-feira",
     "terça-feira",
@@ -28,10 +26,6 @@ _MESES = (
     "novembro",
     "dezembro",
 )
-
-
-def agora(fuso: str) -> datetime:
-    return datetime.now(ZoneInfo(fuso))
 
 
 def formatar_data(dia: date) -> str:

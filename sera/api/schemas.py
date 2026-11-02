@@ -138,8 +138,3 @@ class InscricaoPushEntrada(BaseModel):
         if not valor.startswith(("https://", "http://localhost")):
             raise ValueError("endpoint precisa ser uma URL https")
         return valor
-
-
-class CompromissoFiltro(BaseModel):
-    de: datetime | None = None
-    ate: datetime | None = None

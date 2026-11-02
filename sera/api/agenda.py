@@ -21,6 +21,8 @@ from .schemas import (
     CompromissoEntrada,
     InscricaoPushEntrada,
 )
+from .tempo import com_fuso as _com_fuso
+from .tempo import iso_utc as _utc
 from .webpush import (
     FalhaPush,
     NotificacoesIndisponiveis,
@@ -38,16 +40,6 @@ _PAYLOAD_TESTE = {
     "url": "/agenda",
     "tag": "teste",
 }
-
-
-def _utc(valor: datetime) -> str:
-    return valor.astimezone(timezone.utc).isoformat(timespec="microseconds")
-
-
-def _com_fuso(valor: datetime, config: Config) -> datetime:
-    if valor.tzinfo is not None:
-        return valor
-    return valor.replace(tzinfo=ZoneInfo(config.fuso_horario))
 
 
 def _normalizar(
@@ -105,8 +97,8 @@ async def listar_compromissos(
     pessoa = _pessoa_do_usuario(usuario, pessoa_id)
     return await banco.listar_compromissos(
         pessoa,
-        _utc(_com_fuso(de, config)) if de is not None else None,
-        _utc(_com_fuso(ate, config)) if ate is not None else None,
+        _utc(_com_fuso(de, config.fuso_horario)) if de is not None else None,
+        _utc(_com_fuso(ate, config.fuso_horario)) if ate is not None else None,
     )
 
 
@@ -122,8 +114,8 @@ async def criar_compromisso(
     dados = _normalizar(
         titulo=corpo.titulo,
         descricao=corpo.descricao,
-        inicio=_com_fuso(corpo.inicio, config),
-        fim=_com_fuso(corpo.fim, config),
+        inicio=_com_fuso(corpo.inicio, config.fuso_horario),
+        fim=_com_fuso(corpo.fim, config.fuso_horario),
         fuso=corpo.fuso,
         lembrete_minutos=corpo.lembrete_minutos,
         config=config,
@@ -155,12 +147,12 @@ async def atualizar_compromisso(
     atual = await _compromisso_da_pessoa(compromisso_id, pessoa, banco)
 
     inicio = (
-        _com_fuso(corpo.inicio, config)
+        _com_fuso(corpo.inicio, config.fuso_horario)
         if corpo.inicio is not None
         else datetime.fromisoformat(atual["inicio"])
     )
     fim = (
-        _com_fuso(corpo.fim, config)
+        _com_fuso(corpo.fim, config.fuso_horario)
         if corpo.fim is not None
         else datetime.fromisoformat(atual["fim"])
     )
