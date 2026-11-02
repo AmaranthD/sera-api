@@ -19,7 +19,26 @@ self.addEventListener('push', (evento) => {
     data: { url: dados.url || '/agenda' },
   }
 
-  evento.waitUntil(self.registration.showNotification(titulo, opcoes))
+  evento.waitUntil(
+    (async () => {
+      // Resposta de chat: se a conversa já está aberta e visível, o polling
+      // atualiza a tela; não vale duplicar com uma notificação.
+      if (dados.tipo === 'mensagem') {
+        const janelas = await self.clients.matchAll({
+          type: 'window',
+          includeUncontrolled: true,
+        })
+        const alvo = dados.url || ''
+        const vendo = janelas.some(
+          (janela) =>
+            janela.visibilityState === 'visible' &&
+            (!alvo || janela.url.includes(alvo)),
+        )
+        if (vendo) return
+      }
+      await self.registration.showNotification(titulo, opcoes)
+    })(),
+  )
 })
 
 self.addEventListener('notificationclick', (evento) => {

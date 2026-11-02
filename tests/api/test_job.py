@@ -273,3 +273,52 @@ async def test_estado_job_resolve_orfao(cliente, app):
 
     assert resposta.status_code == 200
     assert resposta.json()["status"] == "interrompida"
+
+
+async def test_job_envia_push_quando_resposta_fica_pronta(
+    config, fake, monkeypatch
+):
+    from dataclasses import replace
+
+    from sera.api import rotas as rotas_mod
+
+    envios: list[dict] = []
+
+    async def push_falso(inscricao, payload, config):
+        envios.append({"inscricao": inscricao, "payload": payload})
+
+    monkeypatch.setattr(rotas_mod, "enviar_push", push_falso)
+    app = criar_app(
+        replace(
+            config,
+            vapid_public_key="chave-publica",
+            vapid_private_key="chave-privada",
+        ),
+        llm=fake,
+    )
+    transporte = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transporte, base_url="http://test"
+    ) as cliente:
+        await criar_pessoa(cliente)
+        await app.state.banco.criar_inscricao(
+            "maria",
+            "https://push.exemplo/abc",
+            "p256dh",
+            "auth",
+        )
+        inicio = await cliente.post(
+            "/chat/job",
+            json={"pessoa_id": "maria", "mensagem": "Oi, Sera"},
+        )
+        trabalho = inicio.json()
+        await _aguardar(
+            cliente, trabalho["conversa_id"], trabalho["resposta_id"]
+        )
+
+    assert len(envios) == 1
+    payload = envios[0]["payload"]
+    assert payload["tipo"] == "mensagem"
+    assert payload["corpo"] == "Olá, Maria!"
+    assert payload["url"] == f"/c/{trabalho['conversa_id']}"
+    assert payload["tag"] == f"chat-{trabalho['resposta_id']}"

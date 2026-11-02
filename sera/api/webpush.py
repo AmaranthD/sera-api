@@ -92,3 +92,32 @@ def payload_lembrete(compromisso: Mapping[str, Any]) -> dict:
         "tag": f"compromisso-{compromisso['id']}",
         "compromisso_id": compromisso["id"],
     }
+
+
+def payload_mensagem(
+    conversa_id: str,
+    resposta_id: str,
+    texto: str,
+    *,
+    erro: bool = False,
+) -> dict:
+    """Notificação de uma resposta do chat assíncrono pronta."""
+    trecho = " ".join(str(texto or "").split())
+    if erro:
+        corpo = "A Sera não conseguiu concluir a resposta. Abra para tentar."
+    elif trecho:
+        limite = 140
+        corpo = trecho[:limite].rstrip()
+        if len(trecho) > limite:
+            corpo = f"{corpo}…"
+    else:
+        corpo = "Sua resposta está pronta."
+    return {
+        "titulo": "Sera",
+        "corpo": corpo,
+        "url": f"/c/{conversa_id}",
+        "tag": f"chat-{resposta_id}",
+        "tipo": "mensagem",
+        "conversa_id": conversa_id,
+        "resposta_id": resposta_id,
+    }

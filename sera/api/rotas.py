@@ -83,6 +83,12 @@ from .schemas import (
     PessoaEntrada,
     TemaEntrada,
 )
+from .webpush import (
+    FalhaPush,
+    NotificacoesIndisponiveis,
+    enviar_push,
+    payload_mensagem,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -775,6 +781,45 @@ async def cancelar_job(
     return Response(status_code=204)
 
 
+async def _notificar_resposta(
+    banco: Banco,
+    config: Config,
+    pessoa_id: str,
+    conversa_id: str,
+    resposta_id: str,
+    texto: str,
+    *,
+    erro: bool = False,
+) -> None:
+    """Avisa por Web Push que o job terminou, sem derrubar o job."""
+    if not config.notificacoes_ativas:
+        return
+    try:
+        inscricoes = await banco.listar_inscricoes(pessoa_id)
+    except Exception:
+        logger.exception("falha ao listar inscrições da resposta pronta")
+        return
+    if not inscricoes:
+        return
+
+    payload = payload_mensagem(
+        conversa_id, resposta_id, texto, erro=erro
+    )
+    for inscricao in inscricoes:
+        try:
+            await enviar_push(inscricao, payload, config)
+        except FalhaPush as falha:
+            if falha.inscricao_morta:
+                await banco.apagar_inscricao_por_endpoint(
+                    inscricao["endpoint"]
+                )
+        except NotificacoesIndisponiveis as falha:
+            logger.warning("push indisponível: %s", falha)
+            return
+        except Exception:
+            logger.exception("falha ao notificar resposta pronta")
+
+
 async def _rodar_job(
     app: FastAPI,
     banco: Banco,
@@ -874,8 +919,17 @@ async def _rodar_job(
                 )
                 ultimo_salvo = instante
 
+        resposta = "".join(partes)
         await banco.atualizar_mensagem(
-            resposta_id, "".join(partes), "completa", fontes
+            resposta_id, resposta, "completa", fontes
+        )
+        await _notificar_resposta(
+            banco,
+            config,
+            linha_pessoa["id"],
+            conversa_id,
+            resposta_id,
+            resposta,
         )
         logger.info("job de chat concluído: resposta=%s", resposta_id)
     except asyncio.CancelledError:
@@ -890,10 +944,28 @@ async def _rodar_job(
         await banco.atualizar_mensagem(
             resposta_id, "".join(partes), "erro", fontes
         )
+        await _notificar_resposta(
+            banco,
+            config,
+            linha_pessoa["id"],
+            conversa_id,
+            resposta_id,
+            "",
+            erro=True,
+        )
     except Exception:
         logger.exception("falha inesperada no job de chat")
         await banco.atualizar_mensagem(
             resposta_id, "".join(partes), "erro", fontes
+        )
+        await _notificar_resposta(
+            banco,
+            config,
+            linha_pessoa["id"],
+            conversa_id,
+            resposta_id,
+            "",
+            erro=True,
         )
     finally:
         if fechar_banco:

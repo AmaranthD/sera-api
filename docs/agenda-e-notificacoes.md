@@ -47,6 +47,15 @@ padrão é 10 minutos antes e o fim padrão é uma hora depois do início. Se o
 horário cruzar outro compromisso, a ferramenta devolve o conflito em vez de
 gravar.
 
+## Respostas do chat
+
+Quando um job assíncrono (`POST /chat/job`) termina, a API envia Web Push
+para todas as inscrições da pessoa: título "Sera", prévia da resposta (ou
+aviso de erro) e link para `/c/{conversa_id}`. Exige VAPID configurado e
+notificações ativadas no dispositivo (Agenda → Ativar notificações). O
+service worker não mostra a notificação quando já existe uma janela do app
+visível, para não duplicar o polling. Jobs cancelados não notificam.
+
 ## Configuração
 
 ```bash
