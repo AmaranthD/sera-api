@@ -1,0 +1,36 @@
+name: lembretes
+
+# O Render free dorme sem tráfego. Este cron acorda a API a cada 5 minutos
+# e chama o endpoint que dispara os lembretes vencidos.
+# Configure os secrets SERA_API_URL e SERA_NOTIFICACOES_SEGREDO no repo.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lembretes
+  cancel-in-progress: false
+
+jobs:
+  disparar:
+    name: disparar lembretes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar a API
+        env:
+          SERA_API_URL: ${{ secrets.SERA_API_URL }}
+          SERA_NOTIFICACOES_SEGREDO: ${{ secrets.SERA_NOTIFICACOES_SEGREDO }}
+        run: |
+          if [ -z "$SERA_API_URL" ] || [ -z "$SERA_NOTIFICACOES_SEGREDO" ]; then
+            echo "SERA_API_URL e SERA_NOTIFICACOES_SEGREDO precisam estar nos secrets."
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            --retry 3 --retry-delay 20 --max-time 120 \
+            -X POST "${SERA_API_URL%/}/notificacoes/disparar" \
+            -H "X-Sera-Segredo: ${SERA_NOTIFICACOES_SEGREDO}"

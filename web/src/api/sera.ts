@@ -1,15 +1,21 @@
 import type {
   Ajuste,
   AtualizacaoAjuste,
+  AtualizacaoCompromisso,
   AtualizacaoMemoria,
+  Compromisso,
   Conversa,
   DadosExportados,
   EntradaChat,
+  EntradaCompromisso,
+  EntradaInscricaoPush,
   EntradaPessoa,
   EventoChat,
+  InscricaoPush,
   Memoria,
   Mensagem,
   Pessoa,
+  TrabalhoChat,
 } from '../dominios/tipos'
 import { transmitirChat } from './chat'
 import type { ClienteHttp } from './http'
@@ -123,5 +129,95 @@ export class ApiSera {
     sinal?: AbortSignal,
   ): Promise<void> {
     return transmitirChat(this.http, entrada, aoEvento, sinal)
+  }
+
+  /** Cria a resposta em segundo plano; o app acompanha por polling. */
+  iniciarChat(entrada: EntradaChat): Promise<TrabalhoChat> {
+    return this.http.json<TrabalhoChat>('/chat/job', {
+      metodo: 'POST',
+      corpo: {
+        mensagem: entrada.mensagem,
+        conversa_id: entrada.conversaId,
+        ...(entrada.fonte ? { fonte: entrada.fonte } : {}),
+      },
+    })
+  }
+
+  cancelarChat(respostaId: string): Promise<null> {
+    return this.http.json<null>(
+      `/chat/job/${encodeURIComponent(respostaId)}/cancelar`,
+      { metodo: 'POST' },
+    )
+  }
+
+  estadoChat(respostaId: string): Promise<Mensagem> {
+    return this.http.json<Mensagem>(`/chat/job/${encodeURIComponent(respostaId)}`)
+  }
+
+  listarCompromissos(pessoaId: string): Promise<Compromisso[]> {
+    return this.http.json<Compromisso[]>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/compromissos`,
+    )
+  }
+
+  criarCompromisso(pessoaId: string, dados: EntradaCompromisso): Promise<Compromisso> {
+    return this.http.json<Compromisso>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/compromissos`,
+      { metodo: 'POST', corpo: dados },
+    )
+  }
+
+  atualizarCompromisso(
+    pessoaId: string,
+    compromissoId: string,
+    dados: AtualizacaoCompromisso,
+  ): Promise<Compromisso> {
+    return this.http.json<Compromisso>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/compromissos/${encodeURIComponent(compromissoId)}`,
+      { metodo: 'PATCH', corpo: dados },
+    )
+  }
+
+  apagarCompromisso(pessoaId: string, compromissoId: string): Promise<null> {
+    return this.http.json<null>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/compromissos/${encodeURIComponent(compromissoId)}`,
+      { metodo: 'DELETE' },
+    )
+  }
+
+  chaveNotificacoes(): Promise<{ chave: string }> {
+    return this.http.json<{ chave: string }>('/notificacoes/chave')
+  }
+
+  listarInscricoes(pessoaId: string): Promise<InscricaoPush[]> {
+    return this.http.json<InscricaoPush[]>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/notificacoes/inscricoes`,
+    )
+  }
+
+  inscreverNotificacoes(
+    pessoaId: string,
+    dados: EntradaInscricaoPush,
+  ): Promise<InscricaoPush> {
+    return this.http.json<InscricaoPush>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/notificacoes/inscricoes`,
+      { metodo: 'POST', corpo: dados },
+    )
+  }
+
+  removerNotificacoes(pessoaId: string, endpoint: string): Promise<null> {
+    return this.http.json<null>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/notificacoes/inscricoes?endpoint=${encodeURIComponent(endpoint)}`,
+      { metodo: 'DELETE' },
+    )
+  }
+
+  testarNotificacao(
+    pessoaId: string,
+  ): Promise<{ enviados: number; dispositivos: number }> {
+    return this.http.json<{ enviados: number; dispositivos: number }>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/notificacoes/teste`,
+      { metodo: 'POST' },
+    )
   }
 }

@@ -53,6 +53,16 @@ export function ConteudoLateral({ aoNavegar, aoFechar }: Props) {
       </div>
 
       <div className={estilos.lateralRodape}>
+        <Link to="/agenda" className={estilos.pessoa} onClick={() => aoNavegar?.()}>
+          <span className={estilos.avatar} aria-hidden="true">
+            <Icone nome="relogio" tamanho={18} />
+          </span>
+          <span className={estilos.pessoaTexto}>
+            <span className={estilos.pessoaNome}>Agenda</span>
+            <span className={estilos.pessoaLink}>Compromissos e lembretes</span>
+          </span>
+          <Icone nome="relogio" tamanho={17} />
+        </Link>
         {pessoa ? (
           <Link to="/conta" className={estilos.pessoa} onClick={() => aoNavegar?.()}>
             <span className={estilos.avatar} aria-hidden="true">

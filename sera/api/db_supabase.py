@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 
 import httpx
@@ -189,6 +189,7 @@ class BancoSupabase:
         papel: str,
         conteudo: str,
         status: str = "completa",
+        fontes: Sequence[dict] | None = None,
     ) -> dict:
         dados = await self._req(
             "POST",
@@ -198,6 +199,7 @@ class BancoSupabase:
                 "papel": papel,
                 "conteudo": conteudo,
                 "status": status,
+                "fontes": list(fontes or []),
             },
             prefer="return=representation",
         )
@@ -210,6 +212,65 @@ class BancoSupabase:
             prefer="return=minimal",
         )
         return mensagem
+
+    async def atualizar_mensagem(
+        self,
+        mensagem_id: str,
+        conteudo: str,
+        status: str,
+        fontes: Sequence[dict] | None = None,
+    ) -> dict | None:
+        corpo: dict = {"conteudo": conteudo, "status": status}
+        if fontes is not None:
+            corpo["fontes"] = list(fontes)
+        dados = await self._req(
+            "PATCH",
+            "mensagens",
+            params={"id": f"eq.{mensagem_id}"},
+            corpo=corpo,
+            prefer="return=representation",
+        )
+        return _um(dados) if dados else None
+
+    async def obter_mensagem(self, mensagem_id: str) -> dict | None:
+        dados = await self._req(
+            "GET",
+            "mensagens",
+            params={"select": "*", "id": f"eq.{mensagem_id}"},
+        )
+        return _primeiro(dados)
+
+    async def mensagem_gerando(self, conversa_id: str) -> dict | None:
+        dados = await self._req(
+            "GET",
+            "mensagens",
+            params={
+                "select": "*",
+                "conversa_id": f"eq.{conversa_id}",
+                "status": "eq.gerando",
+                "order": "criada_em.asc",
+                "limit": "1",
+            },
+        )
+        return _primeiro(dados)
+
+    async def marcar_gerando_interrompidas(
+        self, conversa_id: str, segundos: int = 600
+    ) -> None:
+        limite = (
+            datetime.now(timezone.utc) - timedelta(seconds=segundos)
+        ).isoformat(timespec="seconds")
+        await self._req(
+            "PATCH",
+            "mensagens",
+            params={
+                "conversa_id": f"eq.{conversa_id}",
+                "status": "eq.gerando",
+                "criada_em": f"lt.{limite}",
+            },
+            corpo={"status": "interrompida"},
+            prefer="return=minimal",
+        )
 
     async def ultimas_mensagens(
         self, conversa_id: str, limite: int
@@ -232,7 +293,7 @@ class BancoSupabase:
             "GET",
             "mensagens",
             params={
-                "select": "id,papel,conteudo,status,criada_em",
+                "select": "id,conversa_id,papel,conteudo,status,fontes,criada_em",
                 "conversa_id": f"eq.{conversa_id}",
                 "order": "criada_em.asc",
             },
@@ -394,6 +455,199 @@ class BancoSupabase:
             prefer="return=representation",
         )
         return _primeiro(dados)
+
+    async def criar_compromisso(
+        self, pessoa_id: str, dados: dict
+    ) -> dict:
+        momento = agora()
+        resultado = await self._req(
+            "POST",
+            "compromissos",
+            corpo={
+                "pessoa_id": pessoa_id,
+                "titulo": dados["titulo"],
+                "descricao": dados.get("descricao") or "",
+                "inicio": dados["inicio"],
+                "fim": dados["fim"],
+                "fuso": dados["fuso"],
+                "lembrete_minutos": dados["lembrete_minutos"],
+                "lembrete_em": dados["lembrete_em"],
+                "criado_em": momento,
+                "atualizado_em": momento,
+            },
+            prefer="return=representation",
+        )
+        return _um(resultado)
+
+    async def listar_compromissos(
+        self,
+        pessoa_id: str,
+        de: str | None = None,
+        ate: str | None = None,
+    ) -> list[dict]:
+        params = {
+            "select": "*",
+            "pessoa_id": f"eq.{pessoa_id}",
+            "order": "inicio.asc",
+        }
+        if de is not None:
+            params["fim"] = f"gt.{de}"
+        if ate is not None:
+            params["inicio"] = f"lt.{ate}"
+        return await self._req("GET", "compromissos", params=params) or []
+
+    async def obter_compromisso(self, compromisso_id: str) -> dict | None:
+        dados = await self._req(
+            "GET",
+            "compromissos",
+            params={"select": "*", "id": f"eq.{compromisso_id}"},
+        )
+        return _primeiro(dados)
+
+    async def atualizar_compromisso(
+        self, compromisso_id: str, dados: dict
+    ) -> dict | None:
+        atual = await self.obter_compromisso(compromisso_id)
+        if atual is None:
+            return None
+        enviado = (
+            None
+            if atual.get("lembrete_em") != dados["lembrete_em"]
+            else atual.get("lembrete_enviado_em")
+        )
+        resultado = await self._req(
+            "PATCH",
+            "compromissos",
+            params={"id": f"eq.{compromisso_id}"},
+            corpo={
+                "titulo": dados["titulo"],
+                "descricao": dados.get("descricao") or "",
+                "inicio": dados["inicio"],
+                "fim": dados["fim"],
+                "fuso": dados["fuso"],
+                "lembrete_minutos": dados["lembrete_minutos"],
+                "lembrete_em": dados["lembrete_em"],
+                "lembrete_enviado_em": enviado,
+                "atualizado_em": agora(),
+            },
+            prefer="return=representation",
+        )
+        return _um(resultado) if resultado else None
+
+    async def apagar_compromisso(self, compromisso_id: str) -> bool:
+        dados = await self._req(
+            "DELETE",
+            "compromissos",
+            params={"id": f"eq.{compromisso_id}"},
+            prefer="return=representation",
+        )
+        return bool(dados)
+
+    async def conflito_compromisso(
+        self,
+        pessoa_id: str,
+        inicio: str,
+        fim: str,
+        excluir_id: str | None = None,
+    ) -> dict | None:
+        params = {
+            "select": "*",
+            "pessoa_id": f"eq.{pessoa_id}",
+            "inicio": f"lt.{fim}",
+            "fim": f"gt.{inicio}",
+            "order": "inicio.asc",
+            "limit": "1",
+        }
+        if excluir_id is not None:
+            params["id"] = f"neq.{excluir_id}"
+        dados = await self._req("GET", "compromissos", params=params)
+        return _primeiro(dados)
+
+    async def lembretes_pendentes(self, momento: str) -> list[dict]:
+        return await self._req(
+            "GET",
+            "compromissos",
+            params={
+                "select": "*",
+                "lembrete_enviado_em": "is.null",
+                "lembrete_em": f"lte.{momento}",
+                "fim": f"gte.{momento}",
+                "order": "lembrete_em.asc",
+                "limit": "200",
+            },
+        ) or []
+
+    async def reivindicar_lembrete(
+        self, compromisso_id: str, momento: str
+    ) -> bool:
+        dados = await self._req(
+            "PATCH",
+            "compromissos",
+            params={
+                "id": f"eq.{compromisso_id}",
+                "lembrete_enviado_em": "is.null",
+            },
+            corpo={"lembrete_enviado_em": momento},
+            prefer="return=representation",
+        )
+        return bool(dados)
+
+    async def criar_inscricao(
+        self,
+        pessoa_id: str,
+        endpoint: str,
+        p256dh: str,
+        auth: str,
+        user_agent: str | None = None,
+    ) -> dict:
+        resultado = await self._req(
+            "POST",
+            "push_inscricoes",
+            params={"on_conflict": "endpoint"},
+            corpo={
+                "pessoa_id": pessoa_id,
+                "endpoint": endpoint,
+                "p256dh": p256dh,
+                "auth": auth,
+                "user_agent": user_agent,
+            },
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        return _um(resultado)
+
+    async def listar_inscricoes(self, pessoa_id: str) -> list[dict]:
+        return await self._req(
+            "GET",
+            "push_inscricoes",
+            params={
+                "select": "*",
+                "pessoa_id": f"eq.{pessoa_id}",
+                "order": "criada_em.asc",
+            },
+        ) or []
+
+    async def apagar_inscricao(
+        self, pessoa_id: str, inscricao_id: str
+    ) -> bool:
+        dados = await self._req(
+            "DELETE",
+            "push_inscricoes",
+            params={
+                "id": f"eq.{inscricao_id}",
+                "pessoa_id": f"eq.{pessoa_id}",
+            },
+            prefer="return=representation",
+        )
+        return bool(dados)
+
+    async def apagar_inscricao_por_endpoint(self, endpoint: str) -> bool:
+        dados = await self._req(
+            "DELETE",
+            "push_inscricoes",
+            params={"endpoint": f"eq.{endpoint}"},
+            prefer="return=representation",
+        )
+        return bool(dados)
 
     async def buscar_trechos(self, consulta: str, limite: int) -> list[dict]:
         if limite <= 0:

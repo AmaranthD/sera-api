@@ -10,6 +10,7 @@ import { Marca } from './componentes/Marca'
 import type { Ambiente } from './env'
 import { PessoaProvider } from './pessoa/PessoaProvider'
 import { usePessoa } from './pessoa/contexto'
+import { Agenda } from './telas/agenda/Agenda'
 import { ChatTela } from './telas/chat/ChatTela'
 import { Conta } from './telas/conta/Conta'
 import { Instalar } from './telas/instalar/Instalar'
@@ -57,6 +58,7 @@ export function App({ ambiente }: { ambiente: Ambiente }) {
             <Route path="/instalar" element={<Instalar />} />
             <Route element={<Protegido />}>
               <Route path="/conta" element={<Conta />} />
+              <Route path="/agenda" element={<Agenda />} />
               <Route
                 element={
                   <ChatProvider>

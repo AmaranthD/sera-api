@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator, Sequence
 from uuid import uuid4
@@ -11,7 +12,7 @@ from anyio import to_thread
 
 from .. import rag
 
-VERSAO_SCHEMA = 2
+VERSAO_SCHEMA = 4
 
 _CORTE_RELATIVO = 0.65
 
@@ -106,8 +107,75 @@ CREATE VIRTUAL TABLE IF NOT EXISTS trechos_fts USING fts5(
 """
 
 
+_SQL_V3 = """
+DROP INDEX IF EXISTS idx_mensagens_conversa;
+ALTER TABLE mensagens RENAME TO mensagens_v2;
+CREATE TABLE mensagens (
+    id TEXT PRIMARY KEY,
+    conversa_id TEXT NOT NULL REFERENCES conversas(id) ON DELETE CASCADE,
+    papel TEXT NOT NULL CHECK (papel IN ('user', 'assistant')),
+    conteudo TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN (
+        'gerando', 'completa', 'interrompida', 'erro'
+    )),
+    fontes TEXT NOT NULL DEFAULT '[]',
+    criada_em TEXT NOT NULL
+);
+INSERT INTO mensagens
+    (id, conversa_id, papel, conteudo, status, fontes, criada_em)
+SELECT id, conversa_id, papel, conteudo, status, '[]', criada_em
+FROM mensagens_v2;
+DROP TABLE mensagens_v2;
+CREATE INDEX IF NOT EXISTS idx_mensagens_conversa
+    ON mensagens(conversa_id, criada_em);
+"""
+
+
+_SQL_V4 = """
+CREATE TABLE IF NOT EXISTS compromissos (
+    id TEXT PRIMARY KEY,
+    pessoa_id TEXT NOT NULL REFERENCES pessoas(id) ON DELETE CASCADE,
+    titulo TEXT NOT NULL,
+    descricao TEXT NOT NULL DEFAULT '',
+    inicio TEXT NOT NULL,
+    fim TEXT NOT NULL,
+    fuso TEXT NOT NULL,
+    lembrete_minutos INTEGER NOT NULL DEFAULT 10,
+    lembrete_em TEXT NOT NULL,
+    lembrete_enviado_em TEXT,
+    criado_em TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_compromissos_pessoa
+    ON compromissos(pessoa_id, inicio);
+CREATE INDEX IF NOT EXISTS idx_compromissos_lembrete
+    ON compromissos(lembrete_em) WHERE lembrete_enviado_em IS NULL;
+
+CREATE TABLE IF NOT EXISTS push_inscricoes (
+    id TEXT PRIMARY KEY,
+    pessoa_id TEXT NOT NULL REFERENCES pessoas(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    user_agent TEXT,
+    criada_em TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_push_inscricoes_pessoa
+    ON push_inscricoes(pessoa_id);
+"""
+
+
 def agora() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _com_fontes(linha: dict) -> dict:
+    if "fontes" in linha:
+        try:
+            linha["fontes"] = json.loads(linha["fontes"] or "[]")
+        except (TypeError, json.JSONDecodeError):
+            linha["fontes"] = []
+    return linha
 
 
 class Banco:
@@ -129,6 +197,12 @@ class Banco:
             if versao < 2:
                 conn.executescript(_SQL_V2)
                 conn.execute("PRAGMA user_version = 2")
+            if versao < 3:
+                conn.executescript(_SQL_V3)
+                conn.execute("PRAGMA user_version = 3")
+            if versao < 4:
+                conn.executescript(_SQL_V4)
+                conn.execute("PRAGMA user_version = 4")
 
     @contextmanager
     def _conexao(self) -> Iterator[sqlite3.Connection]:
@@ -205,10 +279,46 @@ class Banco:
         papel: str,
         conteudo: str,
         status: str = "completa",
+        fontes: Sequence[dict] | None = None,
     ) -> dict:
         return await to_thread.run_sync(
-            self._criar_mensagem, conversa_id, papel, conteudo, status
+            self._criar_mensagem,
+            conversa_id,
+            papel,
+            conteudo,
+            status,
+            list(fontes or []),
         )
+
+    async def atualizar_mensagem(
+        self,
+        mensagem_id: str,
+        conteudo: str,
+        status: str,
+        fontes: Sequence[dict] | None = None,
+    ) -> dict | None:
+        return await to_thread.run_sync(
+            self._atualizar_mensagem,
+            mensagem_id,
+            conteudo,
+            status,
+            None if fontes is None else list(fontes),
+        )
+
+    async def mensagem_gerando(self, conversa_id: str) -> dict | None:
+        return await to_thread.run_sync(
+            self._mensagem_gerando, conversa_id
+        )
+
+    async def marcar_gerando_interrompidas(
+        self, conversa_id: str, segundos: int = 600
+    ) -> None:
+        await to_thread.run_sync(
+            self._marcar_gerando_interrompidas, conversa_id, segundos
+        )
+
+    async def obter_mensagem(self, mensagem_id: str) -> dict | None:
+        return await to_thread.run_sync(self._obter_mensagem, mensagem_id)
 
     async def ultimas_mensagens(
         self, conversa_id: str, limite: int
@@ -290,6 +400,101 @@ class Banco:
     ) -> dict | None:
         return await to_thread.run_sync(
             self._atualizar_ajuste, pessoa_id, ajuste_id, texto, valor
+        )
+
+    async def criar_compromisso(
+        self, pessoa_id: str, dados: dict
+    ) -> dict:
+        return await to_thread.run_sync(
+            self._criar_compromisso, pessoa_id, dados
+        )
+
+    async def listar_compromissos(
+        self,
+        pessoa_id: str,
+        de: str | None = None,
+        ate: str | None = None,
+    ) -> list[dict]:
+        return await to_thread.run_sync(
+            self._listar_compromissos, pessoa_id, de, ate
+        )
+
+    async def obter_compromisso(self, compromisso_id: str) -> dict | None:
+        return await to_thread.run_sync(
+            self._obter_compromisso, compromisso_id
+        )
+
+    async def atualizar_compromisso(
+        self, compromisso_id: str, dados: dict
+    ) -> dict | None:
+        return await to_thread.run_sync(
+            self._atualizar_compromisso, compromisso_id, dados
+        )
+
+    async def apagar_compromisso(self, compromisso_id: str) -> bool:
+        return await to_thread.run_sync(
+            self._apagar_compromisso, compromisso_id
+        )
+
+    async def conflito_compromisso(
+        self,
+        pessoa_id: str,
+        inicio: str,
+        fim: str,
+        excluir_id: str | None = None,
+    ) -> dict | None:
+        return await to_thread.run_sync(
+            self._conflito_compromisso,
+            pessoa_id,
+            inicio,
+            fim,
+            excluir_id,
+        )
+
+    async def lembretes_pendentes(self, momento: str) -> list[dict]:
+        return await to_thread.run_sync(
+            self._lembretes_pendentes, momento
+        )
+
+    async def reivindicar_lembrete(
+        self, compromisso_id: str, momento: str
+    ) -> bool:
+        return await to_thread.run_sync(
+            self._reivindicar_lembrete, compromisso_id, momento
+        )
+
+    async def criar_inscricao(
+        self,
+        pessoa_id: str,
+        endpoint: str,
+        p256dh: str,
+        auth: str,
+        user_agent: str | None = None,
+    ) -> dict:
+        return await to_thread.run_sync(
+            self._criar_inscricao,
+            pessoa_id,
+            endpoint,
+            p256dh,
+            auth,
+            user_agent,
+        )
+
+    async def listar_inscricoes(self, pessoa_id: str) -> list[dict]:
+        return await to_thread.run_sync(
+            self._listar_inscricoes, pessoa_id
+        )
+
+    async def apagar_inscricao(
+        self, pessoa_id: str, inscricao_id: str
+    ) -> bool:
+        return await to_thread.run_sync(
+            self._apagar_inscricao, pessoa_id, inscricao_id
+        )
+
+    async def apagar_inscricao_por_endpoint(self, endpoint: str) -> bool:
+        return await to_thread.run_sync(
+            self._apagar_inscricao_por_endpoint, endpoint
         )
 
     def _criar_pessoa(
@@ -379,25 +584,99 @@ class Banco:
             ]
 
     def _criar_mensagem(
-        self, conversa_id: str, papel: str, conteudo: str, status: str
+        self,
+        conversa_id: str,
+        papel: str,
+        conteudo: str,
+        status: str,
+        fontes: Sequence[dict] | None = None,
     ) -> dict:
         mensagem_id = _novo_id()
         momento = agora()
         with self._conexao() as conn:
             conn.execute(
                 "INSERT INTO mensagens "
-                "(id, conversa_id, papel, conteudo, status, criada_em) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (mensagem_id, conversa_id, papel, conteudo, status, momento),
+                "(id, conversa_id, papel, conteudo, status, fontes, criada_em) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    mensagem_id,
+                    conversa_id,
+                    papel,
+                    conteudo,
+                    status,
+                    json.dumps(list(fontes or []), ensure_ascii=False),
+                    momento,
+                ),
             )
             conn.execute(
                 "UPDATE conversas SET atualizada_em = ? WHERE id = ?",
                 (momento, conversa_id),
             )
-            return dict(
+            return _com_fontes(
+                dict(
+                    conn.execute(
+                        "SELECT * FROM mensagens WHERE id = ?", (mensagem_id,)
+                    ).fetchone()
+                )
+            )
+
+    def _atualizar_mensagem(
+        self,
+        mensagem_id: str,
+        conteudo: str,
+        status: str,
+        fontes: Sequence[dict] | None = None,
+    ) -> dict | None:
+        with self._conexao() as conn:
+            if fontes is None:
                 conn.execute(
-                    "SELECT * FROM mensagens WHERE id = ?", (mensagem_id,)
-                ).fetchone()
+                    "UPDATE mensagens SET conteudo = ?, status = ? WHERE id = ?",
+                    (conteudo, status, mensagem_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE mensagens SET conteudo = ?, status = ?, "
+                    "fontes = ? WHERE id = ?",
+                    (
+                        conteudo,
+                        status,
+                        json.dumps(list(fontes), ensure_ascii=False),
+                        mensagem_id,
+                    ),
+                )
+            linha = conn.execute(
+                "SELECT * FROM mensagens WHERE id = ?", (mensagem_id,)
+            ).fetchone()
+            return _com_fontes(dict(linha)) if linha else None
+
+    def _obter_mensagem(self, mensagem_id: str) -> dict | None:
+        with self._conexao() as conn:
+            linha = conn.execute(
+                "SELECT * FROM mensagens WHERE id = ?", (mensagem_id,)
+            ).fetchone()
+            return _com_fontes(dict(linha)) if linha else None
+
+    def _mensagem_gerando(self, conversa_id: str) -> dict | None:
+        with self._conexao() as conn:
+            linha = conn.execute(
+                "SELECT * FROM mensagens WHERE conversa_id = ? "
+                "AND status = 'gerando' ORDER BY rowid ASC LIMIT 1",
+                (conversa_id,),
+            ).fetchone()
+            return _com_fontes(dict(linha)) if linha else None
+
+    def _marcar_gerando_interrompidas(
+        self, conversa_id: str, segundos: int
+    ) -> None:
+        limite = (
+            datetime.now(timezone.utc) - timedelta(seconds=segundos)
+        ).isoformat(timespec="seconds")
+        with self._conexao() as conn:
+            conn.execute(
+                "UPDATE mensagens SET status = 'interrompida' "
+                "WHERE conversa_id = ? AND status = 'gerando' "
+                "AND criada_em < ?",
+                (conversa_id, limite),
             )
 
     def _ultimas_mensagens(self, conversa_id: str, limite: int) -> list[dict]:
@@ -418,13 +697,228 @@ class Banco:
     def _listar_mensagens(self, conversa_id: str) -> list[dict]:
         with self._conexao() as conn:
             return [
-                dict(linha)
+                _com_fontes(dict(linha))
                 for linha in conn.execute(
-                    "SELECT id, papel, conteudo, status, criada_em "
-                    "FROM mensagens WHERE conversa_id = ? ORDER BY rowid ASC",
+                    "SELECT id, conversa_id, papel, conteudo, status, fontes, "
+                    "criada_em FROM mensagens WHERE conversa_id = ? "
+                    "ORDER BY rowid ASC",
                     (conversa_id,),
                 )
             ]
+
+    def _criar_compromisso(self, pessoa_id: str, dados: dict) -> dict:
+        compromisso_id = _novo_id()
+        momento = agora()
+        with self._conexao() as conn:
+            conn.execute(
+                "INSERT INTO compromissos "
+                "(id, pessoa_id, titulo, descricao, inicio, fim, fuso, "
+                "lembrete_minutos, lembrete_em, criado_em, atualizado_em) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    compromisso_id,
+                    pessoa_id,
+                    dados["titulo"],
+                    dados.get("descricao") or "",
+                    dados["inicio"],
+                    dados["fim"],
+                    dados["fuso"],
+                    dados["lembrete_minutos"],
+                    dados["lembrete_em"],
+                    momento,
+                    momento,
+                ),
+            )
+            linha = conn.execute(
+                "SELECT * FROM compromissos WHERE id = ?", (compromisso_id,)
+            ).fetchone()
+            return dict(linha)
+
+    def _listar_compromissos(
+        self, pessoa_id: str, de: str | None, ate: str | None
+    ) -> list[dict]:
+        condicoes = ["pessoa_id = ?"]
+        valores: list[str] = [pessoa_id]
+        if de is not None:
+            condicoes.append("fim > ?")
+            valores.append(de)
+        if ate is not None:
+            condicoes.append("inicio < ?")
+            valores.append(ate)
+        sql = (
+            "SELECT * FROM compromissos WHERE "
+            + " AND ".join(condicoes)
+            + " ORDER BY inicio ASC, id ASC"
+        )
+        with self._conexao() as conn:
+            return [dict(linha) for linha in conn.execute(sql, valores)]
+
+    def _obter_compromisso(self, compromisso_id: str) -> dict | None:
+        with self._conexao() as conn:
+            linha = conn.execute(
+                "SELECT * FROM compromissos WHERE id = ?", (compromisso_id,)
+            ).fetchone()
+            return dict(linha) if linha else None
+
+    def _atualizar_compromisso(
+        self, compromisso_id: str, dados: dict
+    ) -> dict | None:
+        with self._conexao() as conn:
+            atual = conn.execute(
+                "SELECT * FROM compromissos WHERE id = ?", (compromisso_id,)
+            ).fetchone()
+            if atual is None:
+                return None
+            # Só rearma o lembrete quando o horário do aviso muda; editar o
+            # título não deve notificar de novo.
+            enviado = (
+                None
+                if atual["lembrete_em"] != dados["lembrete_em"]
+                else atual["lembrete_enviado_em"]
+            )
+            conn.execute(
+                "UPDATE compromissos SET titulo = ?, descricao = ?, "
+                "inicio = ?, fim = ?, fuso = ?, lembrete_minutos = ?, "
+                "lembrete_em = ?, lembrete_enviado_em = ?, "
+                "atualizado_em = ? WHERE id = ?",
+                (
+                    dados["titulo"],
+                    dados.get("descricao") or "",
+                    dados["inicio"],
+                    dados["fim"],
+                    dados["fuso"],
+                    dados["lembrete_minutos"],
+                    dados["lembrete_em"],
+                    enviado,
+                    agora(),
+                    compromisso_id,
+                ),
+            )
+            linha = conn.execute(
+                "SELECT * FROM compromissos WHERE id = ?", (compromisso_id,)
+            ).fetchone()
+            return dict(linha) if linha else None
+
+    def _apagar_compromisso(self, compromisso_id: str) -> bool:
+        with self._conexao() as conn:
+            resultado = conn.execute(
+                "DELETE FROM compromissos WHERE id = ?", (compromisso_id,)
+            )
+            return resultado.rowcount > 0
+
+    def _conflito_compromisso(
+        self,
+        pessoa_id: str,
+        inicio: str,
+        fim: str,
+        excluir_id: str | None,
+    ) -> dict | None:
+        sql = (
+            "SELECT * FROM compromissos WHERE pessoa_id = ? "
+            "AND inicio < ? AND fim > ?"
+        )
+        valores: list[str] = [pessoa_id, fim, inicio]
+        if excluir_id is not None:
+            sql += " AND id != ?"
+            valores.append(excluir_id)
+        sql += " ORDER BY inicio ASC LIMIT 1"
+        with self._conexao() as conn:
+            linha = conn.execute(sql, valores).fetchone()
+            return dict(linha) if linha else None
+
+    def _lembretes_pendentes(self, momento: str) -> list[dict]:
+        with self._conexao() as conn:
+            return [
+                dict(linha)
+                for linha in conn.execute(
+                    "SELECT * FROM compromissos "
+                    "WHERE lembrete_enviado_em IS NULL "
+                    "AND lembrete_em <= ? AND fim >= ? "
+                    "ORDER BY lembrete_em ASC LIMIT 200",
+                    (momento, momento),
+                )
+            ]
+
+    def _reivindicar_lembrete(
+        self, compromisso_id: str, momento: str
+    ) -> bool:
+        with self._conexao() as conn:
+            resultado = conn.execute(
+                "UPDATE compromissos SET lembrete_enviado_em = ? "
+                "WHERE id = ? AND lembrete_enviado_em IS NULL",
+                (momento, compromisso_id),
+            )
+            return resultado.rowcount > 0
+
+    def _criar_inscricao(
+        self,
+        pessoa_id: str,
+        endpoint: str,
+        p256dh: str,
+        auth: str,
+        user_agent: str | None,
+    ) -> dict:
+        momento = agora()
+        with self._conexao() as conn:
+            existente = conn.execute(
+                "SELECT id FROM push_inscricoes WHERE endpoint = ?",
+                (endpoint,),
+            ).fetchone()
+            if existente is not None:
+                conn.execute(
+                    "UPDATE push_inscricoes SET pessoa_id = ?, p256dh = ?, "
+                    "auth = ?, user_agent = ? WHERE endpoint = ?",
+                    (pessoa_id, p256dh, auth, user_agent, endpoint),
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO push_inscricoes "
+                    "(id, pessoa_id, endpoint, p256dh, auth, user_agent, "
+                    "criada_em) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        _novo_id(),
+                        pessoa_id,
+                        endpoint,
+                        p256dh,
+                        auth,
+                        user_agent,
+                        momento,
+                    ),
+                )
+            linha = conn.execute(
+                "SELECT * FROM push_inscricoes WHERE endpoint = ?",
+                (endpoint,),
+            ).fetchone()
+            return dict(linha)
+
+    def _listar_inscricoes(self, pessoa_id: str) -> list[dict]:
+        with self._conexao() as conn:
+            return [
+                dict(linha)
+                for linha in conn.execute(
+                    "SELECT * FROM push_inscricoes WHERE pessoa_id = ? "
+                    "ORDER BY criada_em ASC",
+                    (pessoa_id,),
+                )
+            ]
+
+    def _apagar_inscricao(
+        self, pessoa_id: str, inscricao_id: str
+    ) -> bool:
+        with self._conexao() as conn:
+            resultado = conn.execute(
+                "DELETE FROM push_inscricoes WHERE id = ? AND pessoa_id = ?",
+                (inscricao_id, pessoa_id),
+            )
+            return resultado.rowcount > 0
+
+    def _apagar_inscricao_por_endpoint(self, endpoint: str) -> bool:
+        with self._conexao() as conn:
+            resultado = conn.execute(
+                "DELETE FROM push_inscricoes WHERE endpoint = ?",
+                (endpoint,),
+            )
+            return resultado.rowcount > 0
 
     def _criar_memoria(
         self, pessoa_id: str, texto: str, categoria: str

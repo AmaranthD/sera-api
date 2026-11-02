@@ -43,6 +43,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        importScripts: ['/push-handlers.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2}'],
         globIgnores: ['**/fundo/paladina.webm', '**/fundo/paladina.mp4'],
         navigateFallback: '/index.html',

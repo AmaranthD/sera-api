@@ -77,7 +77,13 @@ class Config:
     aprendizado_habilitado: bool = True
     supabase_url: str | None = None
     supabase_anon_key: str | None = None
+    supabase_service_key: str | None = None
     supabase_jwt_aud: str = "authenticated"
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
+    vapid_subject: str = "mailto:contato@sera.local"
+    notificacoes_segredo: str | None = None
+    notificacoes_intervalo: float = 60.0
     cors_origins: tuple[str, ...] = ()
     cors_origin_regex: str | None = None
     emails_permitidos: tuple[str, ...] = ()
@@ -151,6 +157,20 @@ class Config:
                 "SUPABASE_ANON_KEY (ou SUPABASE_PUBLISHABLE_KEY) é obrigatória "
                 "quando SUPABASE_URL está definida"
             )
+        if bool(self.vapid_public_key) != bool(self.vapid_private_key):
+            raise ValueError(
+                "VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY precisam ser definidas "
+                "juntas"
+            )
+        if self.vapid_subject and not (
+            self.vapid_subject.startswith("mailto:")
+            or self.vapid_subject.startswith("https://")
+        ):
+            raise ValueError(
+                "VAPID_SUBJECT precisa começar com 'mailto:' ou 'https://'"
+            )
+        if self.notificacoes_intervalo <= 0:
+            raise ValueError("notificacoes_intervalo precisa ser positivo")
 
     def _base_limpa(self) -> str:
         return self.llm_base_url.strip().rstrip("/")
@@ -162,6 +182,19 @@ class Config:
     @property
     def jw_ativa(self) -> bool:
         return bool(self.jw_api_url and self.jw_api_key)
+
+    @property
+    def notificacoes_ativas(self) -> bool:
+        return bool(self.vapid_public_key and self.vapid_private_key)
+
+    @property
+    def agenda_ativa(self) -> bool:
+        """Há como disparar lembretes (push configurado e banco admin)."""
+        if not self.notificacoes_ativas:
+            return False
+        if self.supabase_url and not self.supabase_service_key:
+            return False
+        return True
 
     @property
     def url_chat(self) -> str:
@@ -240,7 +273,13 @@ class Config:
                 opcional("SUPABASE_ANON_KEY")
                 or opcional("SUPABASE_PUBLISHABLE_KEY")
             ),
+            supabase_service_key=opcional("SUPABASE_SERVICE_KEY"),
             supabase_jwt_aud=texto("SUPABASE_JWT_AUD", "authenticated"),
+            vapid_public_key=opcional("VAPID_PUBLIC_KEY"),
+            vapid_private_key=opcional("VAPID_PRIVATE_KEY"),
+            vapid_subject=texto("VAPID_SUBJECT", "mailto:contato@sera.local"),
+            notificacoes_segredo=opcional("NOTIFICACOES_SEGREDO"),
+            notificacoes_intervalo=numero("NOTIFICACOES_INTERVALO", 60.0),
             cors_origins=tuple(
                 origem.strip()
                 for origem in texto("CORS_ORIGINS", "").split(",")

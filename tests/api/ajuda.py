@@ -59,12 +59,14 @@ class FakeLLM:
         falhar_apos: int | None = None,
         uso: Uso | None = None,
         chamadas: Sequence[ChamadaFerramenta] = (),
+        pausa: float = 0.0,
     ) -> None:
         self.chunks = list(chunks)
         self.falhar_antes = falhar_antes
         self.falhar_apos = falhar_apos
         self.uso = uso
         self.chamadas = list(chamadas)
+        self.pausa = pausa
         self.mensagens: list[dict] = []
         self.temperatura: float | None = None
         self.max_tokens: int | None = None
@@ -87,6 +89,11 @@ class FakeLLM:
         self.ferramentas = list(ferramentas) if ferramentas else None
         self.escolha_ferramenta = escolha_ferramenta
         self.chamadas_recebidas += 1
+
+        if self.pausa:
+            import asyncio
+
+            await asyncio.sleep(self.pausa)
 
         if self.falhar_antes:
             raise ErroDoProvedor("falha simulada", status=500)

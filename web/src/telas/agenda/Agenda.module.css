@@ -1,0 +1,249 @@
+.pagina {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: clamp(20px, 4vw, 44px) 20px 48px;
+}
+
+.topo {
+  width: min(720px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.voltar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: var(--raio-pequeno);
+  color: var(--tinta-suave);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.voltar:hover {
+  background: var(--hover);
+  color: var(--tinta);
+}
+
+.conteudo {
+  width: min(720px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cartao {
+  width: 100%;
+  border: 2px solid var(--linha-forte);
+  border-radius: var(--raio);
+  background: var(--superficie);
+  box-shadow: 5px 5px 0 var(--sombra-dura-cor);
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.titulo {
+  margin: 0 0 8px;
+  font-family: var(--fonte-titulo);
+  font-size: clamp(24px, 4vw, 32px);
+  color: var(--tinta);
+}
+
+.subtitulo {
+  margin: 0 0 18px;
+  max-width: 56ch;
+  color: var(--tinta-suave);
+  line-height: 1.55;
+}
+
+.tituloSecao {
+  margin: 0 0 16px;
+  font-family: var(--fonte-titulo);
+  font-size: 20px;
+  color: var(--tinta);
+}
+
+.notificacoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rotuloArea {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--tinta-suave);
+  font-weight: 600;
+}
+
+.area {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--linha-forte);
+  border-radius: var(--raio-pequeno);
+  background: var(--paper);
+  color: var(--tinta);
+  font: inherit;
+  resize: vertical;
+}
+
+.area:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
+}
+
+textarea.area {
+  min-height: 84px;
+}
+
+.duasColunas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.acoesFormulario {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vazio {
+  margin: 0;
+  color: var(--tinta-fraca);
+}
+
+.dias {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.diaTitulo {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--indigo-escuro);
+}
+
+.lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 82px 1fr auto;
+  align-items: start;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--linha);
+  border-left: 4px solid var(--indigo);
+  border-radius: var(--raio-pequeno);
+  background: var(--paper);
+}
+
+.horario {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--fonte-titulo);
+  font-size: 17px;
+  color: var(--tinta);
+  line-height: 1.2;
+}
+
+.horario span {
+  font-family: var(--fonte-corpo);
+  font-size: 12px;
+  color: var(--tinta-fraca);
+}
+
+.itemTexto {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.itemTexto strong {
+  color: var(--tinta);
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.itemTexto p {
+  margin: 0;
+  color: var(--tinta-suave);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.lembrete {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--tinta-fraca);
+  font-size: 12px;
+}
+
+.itemAcoes {
+  display: flex;
+  gap: 6px;
+}
+
+.acao {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--linha-forte);
+  border-radius: var(--raio-pequeno);
+  background: transparent;
+  color: var(--tinta-suave);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.acao:hover {
+  background: var(--hover);
+  color: var(--tinta);
+}
+
+.acaoPerigo:hover {
+  border-color: var(--perigo-borda);
+  background: var(--perigo-claro);
+  color: var(--perigo-texto);
+}
+
+@media (max-width: 560px) {
+  .item {
+    grid-template-columns: 68px 1fr;
+  }
+
+  .itemAcoes {
+    grid-column: 2;
+  }
+}

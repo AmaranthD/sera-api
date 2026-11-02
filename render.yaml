@@ -55,6 +55,24 @@ services:
         value: America/Sao_Paulo
       - key: SERA_APRENDIZADO
         value: "true"
+      # Agenda + Web Push. Gere as chaves com:
+      #   python -c "from py_vapid import Vapid; ..."
+      # (veja docs/agenda-e-notificacoes.md). Sem elas a agenda funciona,
+      # mas as notificações ficam desligadas.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:contato@sera.local
+      - key: NOTIFICACOES_SEGREDO
+        sync: false
+      - key: NOTIFICACOES_INTERVALO
+        value: "60"
+      # Necessária para o disparo agendado ler a agenda de todas as pessoas
+      # (o caminho normal usa o JWT do usuário e o RLS).
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
       # Opcional: serviço separado em jw-mcp/README.md. Sem a URL/chave, a
       # ferramenta JW fica desligada.
       - key: JW_API_URL

@@ -4,12 +4,13 @@ import asyncio
 import json
 import logging
 import sqlite3
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Annotated
 
 import anyio
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..prompt import (
@@ -35,11 +36,15 @@ from .config import Config
 from .db import Banco
 from .db_supabase import Conflito
 from .ferramentas import (
+    INSTRUCAO_AGENDA,
     INSTRUCAO_BUSCA,
     INSTRUCAO_JW,
     INSTRUCAO_JW_MODO,
     INSTRUCAO_MEMORIA,
+    NOME_AGENDAR,
     NOME_AJUSTAR,
+    NOME_CANCELAR_COMPROMISSO,
+    NOME_CONSULTAR_AGENDA,
     NOME_ESQUECER,
     NOME_JW,
     NOME_LEMBRAR,
@@ -475,10 +480,30 @@ async def exportar_dados(
 
 
 @router.get("/conversas/{conversa_id}/mensagens")
-async def listar_mensagens(conversa_id: str, banco: DependenciaBanco):
+async def listar_mensagens(
+    conversa_id: str, request: Request, banco: DependenciaBanco
+):
     if await banco.obter_conversa(conversa_id) is None:
         raise HTTPException(status_code=404, detail="conversa não encontrada")
-    return await banco.listar_mensagens(conversa_id)
+
+    mensagens = await banco.listar_mensagens(conversa_id)
+    jobs = request.app.state.jobs
+    for mensagem in mensagens:
+        if mensagem.get("status") != "gerando":
+            continue
+        if jobs.ativa(mensagem["id"]):
+            continue
+        # Job órfão (reinício do servidor ou cancelamento): não deixa a
+        # conversa presa em "gerando" para sempre.
+        atualizada = await banco.atualizar_mensagem(
+            mensagem["id"],
+            mensagem["conteudo"],
+            "interrompida",
+            mensagem.get("fontes"),
+        )
+        if atualizada is not None:
+            mensagem.update(atualizada)
+    return mensagens
 
 
 @router.post("/chat")
@@ -542,7 +567,7 @@ async def chat(
         personality, linha_pessoa, banco, config, corpo.mensagem, momento
     )
     busca, ferramentas, fontes, system = await _preparar_ferramentas(
-        request, config, corpo.mensagem, system, momento, modo_jw=modo_jw
+        request.app, config, corpo.mensagem, system, momento, modo_jw=modo_jw
     )
     contexto = ContextoFerramentas(
         busca=busca,
@@ -550,6 +575,7 @@ async def chat(
         banco=banco,
         pessoa_id=pessoa_id,
         mensagem_usuario=corpo.mensagem,
+        config=config,
     )
     system, esqueceu = await _aplicar_esquecimento(
         config, corpo.mensagem, system, contexto
@@ -595,8 +621,289 @@ async def chat(
     )
 
 
-async def _preparar_ferramentas(
+@router.post("/chat/job", status_code=202)
+async def chat_job(
+    corpo: ChatEntrada,
     request: Request,
+    banco: DependenciaBanco,
+    config: DependenciaConfig,
+    usuario: DependenciaUsuario,
+):
+    """Inicia a resposta em segundo plano e devolve os IDs para polling."""
+    pessoa_id = _pessoa_do_usuario(usuario, corpo.pessoa_id)
+    linha_pessoa = await banco.obter_pessoa(pessoa_id)
+    if linha_pessoa is None:
+        raise HTTPException(status_code=404, detail="pessoa não encontrada")
+
+    modo_jw = corpo.fonte == "jw"
+    if modo_jw and not (config.jw_ativa and config.llm_provider == "openai"):
+        raise HTTPException(
+            status_code=503,
+            detail="o modo JW não está disponível neste servidor",
+        )
+
+    if corpo.conversa_id is not None:
+        conversa = await banco.obter_conversa(corpo.conversa_id)
+        if conversa is None or conversa["pessoa_id"] != pessoa_id:
+            raise HTTPException(status_code=404, detail="conversa não encontrada")
+    else:
+        conversa = await banco.criar_conversa(
+            pessoa_id, _titulo_da_mensagem(corpo.mensagem)
+        )
+
+    jobs = request.app.state.jobs
+    # A checagem e a criação precisam ser atômicas: dois pedidos simultâneos
+    # na mesma conversa não podem abrir duas respostas `gerando`.
+    async with jobs.trancar():
+        await banco.marcar_gerando_interrompidas(conversa["id"], 600)
+        em_andamento = await banco.mensagem_gerando(conversa["id"])
+        if em_andamento is not None:
+            if jobs.ativa(em_andamento["id"]):
+                raise HTTPException(
+                    status_code=409,
+                    detail="já existe uma resposta em andamento",
+                )
+            # Job órfão (servidor reiniciou): libera a conversa.
+            await banco.atualizar_mensagem(
+                em_andamento["id"],
+                em_andamento["conteudo"],
+                "interrompida",
+                em_andamento.get("fontes"),
+            )
+
+        mensagem_usuario = await banco.criar_mensagem(
+            conversa["id"], "user", corpo.mensagem
+        )
+        resposta = await banco.criar_mensagem(
+            conversa["id"], "assistant", "", "gerando"
+        )
+
+        fabrica = getattr(request.app.state, "banco_fabrica", None)
+        if fabrica is not None:
+            banco_job = fabrica(usuario.token if usuario else None)
+            fechar_banco = True
+        else:
+            banco_job = request.app.state.banco
+            fechar_banco = False
+
+        jobs.iniciar(
+            resposta["id"],
+            _rodar_job(
+                request.app,
+                banco_job,
+                config,
+                linha_pessoa,
+                conversa["id"],
+                corpo.mensagem,
+                resposta["id"],
+                modo_jw,
+                fechar_banco,
+            ),
+        )
+    logger.info(
+        "job de chat iniciado: conversa=%s resposta=%s",
+        conversa["id"],
+        resposta["id"],
+    )
+    return {
+        "conversa_id": conversa["id"],
+        "mensagem_id": mensagem_usuario["id"],
+        "resposta_id": resposta["id"],
+        "status": "gerando",
+    }
+
+
+async def _resposta_da_pessoa(
+    resposta_id: str,
+    banco: Banco,
+    usuario: Usuario | None,
+) -> dict:
+    """Busca a resposta garantindo que ela pertence a quem pediu."""
+    mensagem = await banco.obter_mensagem(resposta_id)
+    if mensagem is None:
+        raise HTTPException(status_code=404, detail="resposta não encontrada")
+    conversa = await banco.obter_conversa(mensagem["conversa_id"])
+    if conversa is None:
+        raise HTTPException(status_code=404, detail="resposta não encontrada")
+    if usuario is not None and conversa["pessoa_id"] != usuario.id:
+        raise HTTPException(status_code=404, detail="resposta não encontrada")
+    return mensagem
+
+
+@router.get("/chat/job/{resposta_id}")
+async def estado_job(
+    resposta_id: str,
+    request: Request,
+    banco: DependenciaBanco,
+    usuario: DependenciaUsuario,
+):
+    """Estado de uma resposta, para o app acompanhar só ela no polling."""
+    mensagem = await _resposta_da_pessoa(resposta_id, banco, usuario)
+    if mensagem["status"] == "gerando" and not request.app.state.jobs.ativa(
+        resposta_id
+    ):
+        # Job órfão (reinício do servidor): não deixa preso em "gerando".
+        atualizada = await banco.atualizar_mensagem(
+            resposta_id,
+            mensagem["conteudo"],
+            "interrompida",
+            mensagem.get("fontes"),
+        )
+        if atualizada is not None:
+            mensagem = atualizada
+    return mensagem
+
+
+@router.post("/chat/job/{resposta_id}/cancelar", status_code=204)
+async def cancelar_job(
+    resposta_id: str,
+    request: Request,
+    banco: DependenciaBanco,
+    usuario: DependenciaUsuario,
+):
+    mensagem = await _resposta_da_pessoa(resposta_id, banco, usuario)
+
+    if not request.app.state.jobs.cancelar(resposta_id) and (
+        mensagem["status"] == "gerando"
+    ):
+        await banco.atualizar_mensagem(
+            resposta_id,
+            mensagem["conteudo"],
+            "interrompida",
+            mensagem.get("fontes"),
+        )
+    return Response(status_code=204)
+
+
+async def _rodar_job(
+    app: FastAPI,
+    banco: Banco,
+    config: Config,
+    linha_pessoa: dict,
+    conversa_id: str,
+    texto: str,
+    resposta_id: str,
+    modo_jw: bool,
+    fechar_banco: bool,
+) -> None:
+    """Gera e persiste a resposta sem depender do request que a criou."""
+    partes: list[str] = []
+    fontes: list[dict] = []
+    ultimo_salvo = 0.0
+    try:
+        if modo_jw:
+            aquecer = getattr(getattr(app.state, "jw", None), "aquecer", None)
+            if callable(aquecer):
+                try:
+                    await aquecer(limite=min(60.0, config.jw_timeout))
+                except JWIndisponivel as erro:
+                    logger.warning(
+                        "serviço JW não acordou no job: %s", erro.detalhe
+                    )
+
+        historico = await banco.ultimas_mensagens(
+            conversa_id, config.max_history_mensagens
+        )
+        _cortar_historico(historico, config.max_history_chars)
+
+        momento = agora_do_fuso(config.fuso_horario)
+        system = await _montar_system(
+            app.state.personality,
+            linha_pessoa,
+            banco,
+            config,
+            texto,
+            momento,
+        )
+        busca, ferramentas, fontes_iniciais, system = (
+            await _preparar_ferramentas(
+                app,
+                config,
+                texto,
+                system,
+                momento,
+                modo_jw=modo_jw,
+            )
+        )
+        contexto = ContextoFerramentas(
+            busca=busca,
+            jw=getattr(app.state, "jw", None),
+            banco=banco,
+            pessoa_id=linha_pessoa["id"],
+            mensagem_usuario=texto,
+            config=config,
+        )
+        system, esqueceu = await _aplicar_esquecimento(
+            config, texto, system, contexto
+        )
+        if esqueceu and ferramentas:
+            ferramentas = [
+                ferramenta
+                for ferramenta in ferramentas
+                if ferramenta["function"]["name"] != NOME_ESQUECER
+            ] or None
+
+        fontes = [dict(fonte) for fonte in fontes_iniciais]
+        mensagens = [{"role": "system", "content": system}]
+        mensagens.extend(
+            {"role": linha["papel"], "content": linha["conteudo"]}
+            for linha in historico
+        )
+        mensagens.append({"role": "user", "content": texto})
+
+        async for evento in _fluxo_com_ferramentas(
+            app.state.llm,
+            mensagens,
+            config,
+            contexto,
+            ferramentas,
+            momento,
+            uma_fonte=modo_jw,
+        ):
+            if isinstance(evento, Delta):
+                partes.append(evento.texto)
+            elif isinstance(evento, Fontes):
+                for fonte in evento.fontes:
+                    if all(item["url"] != fonte["url"] for item in fontes):
+                        fontes.append(dict(fonte))
+
+            instante = time.monotonic()
+            if instante - ultimo_salvo >= 1.2:
+                await banco.atualizar_mensagem(
+                    resposta_id, "".join(partes), "gerando", fontes
+                )
+                ultimo_salvo = instante
+
+        await banco.atualizar_mensagem(
+            resposta_id, "".join(partes), "completa", fontes
+        )
+        logger.info("job de chat concluído: resposta=%s", resposta_id)
+    except asyncio.CancelledError:
+        with anyio.CancelScope(shield=True):
+            await banco.atualizar_mensagem(
+                resposta_id, "".join(partes), "interrompida", fontes
+            )
+        logger.info("job de chat cancelado: resposta=%s", resposta_id)
+        raise
+    except ErroDoProvedor as erro:
+        logger.warning("provedor falhou no job: %s", erro.detalhe)
+        await banco.atualizar_mensagem(
+            resposta_id, "".join(partes), "erro", fontes
+        )
+    except Exception:
+        logger.exception("falha inesperada no job de chat")
+        await banco.atualizar_mensagem(
+            resposta_id, "".join(partes), "erro", fontes
+        )
+    finally:
+        if fechar_banco:
+            fechar = getattr(banco, "fechar", None)
+            if fechar is not None:
+                await fechar()
+
+
+async def _preparar_ferramentas(
+    app: FastAPI,
     config: Config,
     mensagem: str,
     system: str,
@@ -610,27 +917,31 @@ async def _preparar_ferramentas(
     modelo decidir chamar a ferramenta. No modo JW a internet fica desligada
     e a única fonte é o serviço JW.
     """
-    busca: ClienteTavily | None = getattr(request.app.state, "busca", None)
+    busca: ClienteTavily | None = getattr(app.state, "busca", None)
     if not config.busca_ativa or modo_jw:
         busca = None
 
     # O cliente Gemini desta camada ainda não executa tool calling.
     tool_calling = config.llm_provider == "openai"
     aprendizado = config.aprendizado_habilitado and tool_calling
+    agenda = tool_calling and not modo_jw
     jw = config.jw_ativa and tool_calling
     ferramentas = esquemas(
         busca=busca is not None and tool_calling,
         aprendizado=aprendizado,
+        agenda=agenda,
         jw=jw,
         jw_ferramentas=ferramentas_jw_para(mensagem) if modo_jw else None,
     )
     if jw:
         system = f"{system}\n\n{INSTRUCAO_JW}"
+    if agenda:
+        system = f"{system}\n\n{INSTRUCAO_AGENDA}"
     fontes: list[dict] = []
     if modo_jw:
         system = f"{system}\n\n{INSTRUCAO_JW_MODO}"
         referencia = referencia_biblica(mensagem)
-        cliente_jw = getattr(request.app.state, "jw", None)
+        cliente_jw = getattr(app.state, "jw", None)
         if referencia is not None and jw and cliente_jw is not None:
             livro, capitulo, inicio, fim = referencia
             verso = f"{inicio}-{fim}" if fim is not None else str(inicio)
@@ -932,6 +1243,7 @@ async def _fluxo_com_ferramentas(
     for instrucao in (
         INSTRUCAO_BUSCA,
         INSTRUCAO_MEMORIA,
+        INSTRUCAO_AGENDA,
         INSTRUCAO_JW,
         INSTRUCAO_JW_MODO,
     ):
@@ -1060,6 +1372,55 @@ async def _executar_chamadas(
 
 
 def _nota_de_ferramenta(nome: str, resultado: dict) -> str:
+    if nome == NOME_AGENDAR:
+        if not resultado.get("ok"):
+            conflito = resultado.get("conflito") or {}
+            return (
+                "Não agendei: o horário cruza com "
+                f"“{conflito.get('titulo')}” ({conflito.get('inicio')} a "
+                f"{conflito.get('fim')}). Mostre o conflito e pergunte "
+                "outro horário."
+            )
+        compromisso = resultado.get("compromisso") or {}
+        return (
+            f"Agendei: {compromisso.get('titulo')} em "
+            f"{compromisso.get('inicio')} até {compromisso.get('fim')} "
+            f"(id {compromisso.get('id')})."
+        )
+    if nome == NOME_CONSULTAR_AGENDA:
+        itens = resultado.get("compromissos") or []
+        if not itens:
+            return (
+                "A agenda está vazia entre "
+                f"{resultado.get('de')} e {resultado.get('ate')}."
+            )
+        linhas = "; ".join(
+            f"{item.get('id')} — {item.get('titulo')} — "
+            f"{item.get('inicio')} a {item.get('fim')}"
+            for item in itens
+        )
+        return (
+            f"Compromissos ({resultado.get('de')} a "
+            f"{resultado.get('ate')}): {linhas}."
+        )
+    if nome == NOME_CANCELAR_COMPROMISSO:
+        if resultado.get("ambigua"):
+            opcoes = "; ".join(
+                f"{item.get('id')} — {item.get('titulo')} — "
+                f"{item.get('inicio')}"
+                for item in resultado.get("candidatas") or []
+            )
+            return (
+                "Há mais de um compromisso parecido: "
+                f"{opcoes}. Pergunte qual cancelar."
+            )
+        if resultado.get("encontrado") is False or not resultado.get("ok"):
+            return "Não encontrei esse compromisso na agenda."
+        cancelado = resultado.get("cancelado") or {}
+        return (
+            f"Cancelei: {cancelado.get('titulo')} em "
+            f"{cancelado.get('inicio')}."
+        )
     if nome == NOME_LEMBRAR:
         if resultado.get("precisa_confirmar"):
             return (

@@ -237,3 +237,93 @@ async def test_atualizar_ajuste_usa_patch():
     assert requisicao.url.params["id"] == "eq.a1"
     assert requisicao.url.params["pessoa_id"] == "eq.p1"
     assert json.loads(requisicao.content) == {"texto": None, "valor": "leve"}
+
+
+async def test_conflito_compromisso_consulta_intervalo_e_exclui_id():
+    chamadas: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        chamadas.append(request)
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": "k2",
+                    "titulo": "Dentista",
+                    "inicio": "2026-11-10T17:30:00+00:00",
+                    "fim": "2026-11-10T18:30:00+00:00",
+                }
+            ],
+        )
+
+    banco = _banco(handler)
+    try:
+        conflito = await banco.conflito_compromisso(
+            "maria",
+            "2026-11-10T17:00:00+00:00",
+            "2026-11-10T18:00:00+00:00",
+            excluir_id="k1",
+        )
+    finally:
+        await banco.fechar()
+
+    assert conflito["titulo"] == "Dentista"
+    parametros = chamadas[0].url.params
+    assert parametros["inicio"] == "lt.2026-11-10T18:00:00+00:00"
+    assert parametros["fim"] == "gt.2026-11-10T17:00:00+00:00"
+    assert parametros["id"] == "neq.k1"
+
+
+async def test_reivindicar_lembrete_com_condicao_de_nulo():
+    chamadas: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        chamadas.append(request)
+        return httpx.Response(200, json=[{"id": "k1"}])
+
+    banco = _banco(handler)
+    try:
+        assert await banco.reivindicar_lembrete(
+            "k1", "2026-11-10T17:00:00+00:00"
+        )
+    finally:
+        await banco.fechar()
+
+    requisicao = chamadas[0]
+    assert requisicao.method == "PATCH"
+    assert requisicao.url.params["lembrete_enviado_em"] == "is.null"
+    assert json.loads(requisicao.content) == {
+        "lembrete_enviado_em": "2026-11-10T17:00:00+00:00"
+    }
+
+
+async def test_inscricao_usa_upsert_por_endpoint():
+    chamadas: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        chamadas.append(request)
+        return httpx.Response(
+            201,
+            json=[
+                {
+                    "id": "i1",
+                    "pessoa_id": "maria",
+                    "endpoint": "https://push.exemplo/abc",
+                    "p256dh": "p",
+                    "auth": "a",
+                }
+            ],
+        )
+
+    banco = _banco(handler)
+    try:
+        inscricao = await banco.criar_inscricao(
+            "maria", "https://push.exemplo/abc", "p", "a", "teste"
+        )
+    finally:
+        await banco.fechar()
+
+    assert inscricao["id"] == "i1"
+    requisicao = chamadas[0]
+    assert requisicao.url.params["on_conflict"] == "endpoint"
+    assert "merge-duplicates" in requisicao.headers["prefer"]

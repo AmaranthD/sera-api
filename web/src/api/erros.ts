@@ -68,7 +68,9 @@ export function erroDaResposta(status: number, corpo: unknown): ErroApi {
   const detalhe = detalheDoCorpo(corpo)
   if (padrao) {
     const mensagem =
-      (status === 422 || status === 403) && detalhe ? detalhe : padrao.mensagem
+      (status === 422 || status === 403 || status === 409) && detalhe
+        ? detalhe
+        : padrao.mensagem
     return new ErroApi(status, padrao.codigo, mensagem)
   }
   if (status >= 500) {

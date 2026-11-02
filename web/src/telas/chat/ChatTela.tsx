@@ -106,6 +106,15 @@ export function ChatTela() {
             <p className={estilos.cabecalhoSub}>com Sera</p>
           </div>
 
+          <Link
+            to="/agenda"
+            className={estilos.botaoIcone}
+            aria-label="Abrir agenda"
+            title="Agenda"
+          >
+            <Icone nome="relogio" />
+          </Link>
+
           {pessoa ? (
             <Link
               to="/conta"

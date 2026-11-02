@@ -5,10 +5,11 @@ import json
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any, Mapping, Sequence
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..prompt import (
     AjusteAprendido,
@@ -20,6 +21,7 @@ from ..prompt import (
     validar_ajustes,
 )
 from .busca import ClienteTavily, ResultadoBusca
+from .config import Config
 from .jw import ClienteJW
 from .relogio import formatar_data
 
@@ -28,11 +30,19 @@ NOME_LEMBRAR = "lembrar"
 NOME_AJUSTAR = "ajustar_preferencia"
 NOME_ESQUECER = "esquecer"
 NOME_JW = "jw"
+NOME_AGENDAR = "agendar"
+NOME_CONSULTAR_AGENDA = "consultar_agenda"
+NOME_CANCELAR_COMPROMISSO = "cancelar_compromisso"
 
 _MAX_AJUSTES = 20
 _MAX_MEMORIAS = 100
+_MAX_AGENDA = 50
 _TAMANHO_MAXIMO_FATO = 300
 _TAMANHO_MAXIMO_PREFERENCIA = 200
+_TAMANHO_MAXIMO_TITULO_AGENDA = 120
+_DURACAO_PADRAO_MINUTOS = 60
+_MAX_LEMBRETE_MINUTOS = 10080
+_JANELA_PADRAO_DIAS = 30
 
 _VALORES_KNOB = {
     "nivel_sarcasmo": ("nenhum", "leve", "medio", "alto"),
@@ -235,6 +245,115 @@ ESQUEMA_JW = {
     },
 }
 
+ESQUEMA_AGENDAR = {
+    "type": "function",
+    "function": {
+        "name": NOME_AGENDAR,
+        "description": (
+            "Cria um compromisso na agenda da pessoa, com lembrete por "
+            "notificação. Use quando ela pedir para agendar, marcar, "
+            "reservar ou anotar um compromisso em uma data e hora. Converta "
+            "expressões relativas ('amanhã', 'sexta') em datas absolutas "
+            "usando o bloco AGORA do sistema."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "titulo": {
+                    "type": "string",
+                    "description": "Título curto do compromisso.",
+                },
+                "inicio": {
+                    "type": "string",
+                    "description": (
+                        "Início no formato AAAA-MM-DDTHH:MM, sem fuso; o "
+                        "fuso da pessoa é aplicado automaticamente."
+                    ),
+                },
+                "fim": {
+                    "type": "string",
+                    "description": (
+                        "Fim no mesmo formato. Se não souber, omita: o "
+                        "padrão é 1 hora depois do início."
+                    ),
+                },
+                "descricao": {
+                    "type": "string",
+                    "description": "Detalhes opcionais do compromisso.",
+                },
+                "lembrete_minutos": {
+                    "type": "integer",
+                    "description": (
+                        "Quantos minutos antes avisar (0 a 10080). "
+                        "Padrão: 10."
+                    ),
+                },
+            },
+            "required": ["titulo", "inicio"],
+        },
+    },
+}
+
+ESQUEMA_CONSULTAR_AGENDA = {
+    "type": "function",
+    "function": {
+        "name": NOME_CONSULTAR_AGENDA,
+        "description": (
+            "Lista os compromissos da agenda da pessoa em um período. Use "
+            "quando ela perguntar o que tem marcado, se está livre em uma "
+            "data ou pedir a agenda. Sem período, mostra os próximos 30 dias."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "de": {
+                    "type": "string",
+                    "description": (
+                        "Início do período em AAAA-MM-DD ou "
+                        "AAAA-MM-DDTHH:MM. Omita para começar agora."
+                    ),
+                },
+                "ate": {
+                    "type": "string",
+                    "description": (
+                        "Fim do período no mesmo formato. Omita para 30 "
+                        "dias à frente."
+                    ),
+                },
+            },
+        },
+    },
+}
+
+ESQUEMA_CANCELAR_COMPROMISSO = {
+    "type": "function",
+    "function": {
+        "name": NOME_CANCELAR_COMPROMISSO,
+        "description": (
+            "Cancela (apaga) um compromisso da agenda. Use só quando a "
+            "pessoa pedir explicitamente para cancelar, desmarcar ou "
+            "remover um compromisso. Informe o id (obtido em "
+            "consultar_agenda) ou o título."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "Id do compromisso, se você já o tiver.",
+                },
+                "titulo": {
+                    "type": "string",
+                    "description": (
+                        "Trecho do título, quando não souber o id. Se houver "
+                        "mais de um parecido, a ferramenta devolve as opções."
+                    ),
+                },
+            },
+        },
+    },
+}
+
 ESQUEMA_AJUSTAR = {
     "type": "function",
     "function": {
@@ -381,10 +500,34 @@ com `ajustar_preferencia` e apagar memórias com `esquecer`.
   Primeiro chame sem `confirmado`, pergunte ("quer que eu esqueça isso?") e
   só chame de novo com `confirmado=true` depois do sim. Se houver mais de
   uma memória parecida, pergunte qual.
-- Você não tem agenda nem notificações: não prometa avisar em datas futuras.
-  Pode lembrar do fato quando o assunto voltar.
+- A agenda é separada da memória: para marcar, consultar ou cancelar
+  compromissos use as ferramentas `agendar`, `consultar_agenda` e
+  `cancelar_compromisso`.
 - Nunca invente memórias. Se não souber, não guarde.
 - Depois de guardar ou apagar, confirme em uma frase curta e natural."""
+
+INSTRUCAO_AGENDA = """\
+## Agenda
+
+Você pode marcar, consultar e cancelar compromissos na agenda da pessoa.
+
+- Use `agendar` quando ela pedir para marcar, agendar, reservar ou anotar
+  um compromisso com data e hora. Informe `titulo` e `inicio` no formato
+  `AAAA-MM-DDTHH:MM`; `fim` é opcional (uma hora depois por padrão).
+- Use `consultar_agenda` quando ela perguntar o que tem marcado ou se está
+  livre. Sem período, a ferramenta mostra os próximos 30 dias.
+- Use `cancelar_compromisso` só quando ela pedir explicitamente para
+  cancelar, desmarcar ou remover um compromisso. Se não souber o id, passe
+  um trecho do `titulo`.
+- Converta datas relativas ("hoje", "amanhã", "sexta") em datas absolutas
+  usando o bloco AGORA. Se faltar a hora ou o dia, pergunte antes de
+  agendar. Não invente data nem duração.
+- Se a ferramenta avisar que o horário cruza outro compromisso, não force:
+  mostre o conflito e pergunte outro horário.
+- Depois de agendar ou cancelar, confirme em uma frase curta, com o dia, a
+  hora e o aviso (minutos antes). Não diga que não consegue avisar em datas
+  futuras: o lembrete da agenda cuida disso.
+"""
 
 
 class FerramentaDesconhecida(Exception):
@@ -406,12 +549,14 @@ class ContextoFerramentas:
     banco: Any | None = None
     pessoa_id: str | None = None
     mensagem_usuario: str = ""
+    config: Config | None = None
 
 
 def esquemas(
     *,
     busca: bool = False,
     aprendizado: bool = False,
+    agenda: bool = False,
     jw: bool = False,
     jw_ferramentas: Sequence[str] | None = None,
 ) -> list[dict]:
@@ -420,6 +565,14 @@ def esquemas(
         lista.append(ESQUEMA_PESQUISAR_WEB)
     if jw:
         lista.append(_esquema_jw(jw_ferramentas))
+    if agenda:
+        lista.extend(
+            (
+                ESQUEMA_AGENDAR,
+                ESQUEMA_CONSULTAR_AGENDA,
+                ESQUEMA_CANCELAR_COMPROMISSO,
+            )
+        )
     if aprendizado:
         lista.extend((ESQUEMA_LEMBRAR, ESQUEMA_AJUSTAR, ESQUEMA_ESQUECER))
     return lista
@@ -446,6 +599,15 @@ async def executar_ferramenta(
 
     if nome == NOME_JW:
         return await _jw(dados, contexto)
+
+    if nome == NOME_AGENDAR:
+        return await _agendar(dados, contexto)
+
+    if nome == NOME_CONSULTAR_AGENDA:
+        return await _consultar_agenda(dados, contexto)
+
+    if nome == NOME_CANCELAR_COMPROMISSO:
+        return await _cancelar_compromisso(dados, contexto)
 
     if nome == NOME_LEMBRAR:
         return await _lembrar(dados, contexto)
@@ -510,6 +672,233 @@ async def _jw(
         "texto": texto,
         "erro": resposta.erro,
         "fontes": fontes_jw(ferramenta, argumentos, resposta.texto),
+    }
+
+
+def _contexto_agenda(
+    contexto: ContextoFerramentas,
+) -> tuple[Any, str, Config]:
+    if (
+        contexto.banco is None
+        or not contexto.pessoa_id
+        or contexto.config is None
+    ):
+        raise FerramentaInvalida("a agenda não está disponível nesta conversa")
+    return contexto.banco, contexto.pessoa_id, contexto.config
+
+
+def _data_da_agenda(valor: Any, config: Config) -> datetime:
+    texto = str(valor or "").strip()
+    if not texto:
+        raise FerramentaInvalida(
+            "informe a data e a hora no formato AAAA-MM-DDTHH:MM"
+        )
+    if texto.endswith("Z"):
+        texto = f"{texto[:-1]}+00:00"
+    try:
+        momento = datetime.fromisoformat(texto)
+    except ValueError as erro:
+        raise FerramentaInvalida(
+            f"data inválida: {valor!r}; use AAAA-MM-DD ou AAAA-MM-DDTHH:MM"
+        ) from erro
+    if momento.tzinfo is None:
+        try:
+            momento = momento.replace(tzinfo=ZoneInfo(config.fuso_horario))
+        except (ValueError, ZoneInfoNotFoundError) as erro:
+            raise FerramentaInvalida(
+                f"fuso horário inválido: {config.fuso_horario}"
+            ) from erro
+    return momento
+
+
+def _somente_data(valor: str) -> bool:
+    return re.fullmatch(r"\d{4}-\d{2}-\d{2}", valor.strip()) is not None
+
+
+def _iso_utc(momento: datetime) -> str:
+    return momento.astimezone(timezone.utc).isoformat(timespec="microseconds")
+
+
+def _agora_local(config: Config) -> datetime:
+    return datetime.now(ZoneInfo(config.fuso_horario))
+
+
+def _formatar_momento(valor: Any, fuso: ZoneInfo) -> str:
+    try:
+        momento = datetime.fromisoformat(str(valor))
+    except (TypeError, ValueError):
+        return str(valor or "")
+    return momento.astimezone(fuso).strftime("%d/%m/%Y %H:%M")
+
+
+def _compromisso_publico(linha: Mapping, fuso_exibicao: str) -> dict:
+    fuso = str(linha.get("fuso") or fuso_exibicao)
+    try:
+        zona = ZoneInfo(fuso)
+    except (ValueError, ZoneInfoNotFoundError):
+        fuso = fuso_exibicao
+        zona = ZoneInfo(fuso)
+    return {
+        "id": linha.get("id"),
+        "titulo": linha.get("titulo"),
+        "descricao": linha.get("descricao") or "",
+        "inicio": _formatar_momento(linha.get("inicio"), zona),
+        "fim": _formatar_momento(linha.get("fim"), zona),
+        "fuso": fuso,
+    }
+
+
+async def _agendar(
+    dados: Mapping, contexto: ContextoFerramentas
+) -> dict:
+    banco, pessoa, config = _contexto_agenda(contexto)
+
+    titulo = " ".join(str(dados.get("titulo") or "").split())
+    if not titulo:
+        raise FerramentaInvalida("informe o título do compromisso")
+    titulo = titulo[:_TAMANHO_MAXIMO_TITULO_AGENDA].rstrip()
+
+    inicio = _data_da_agenda(dados.get("inicio"), config)
+    fim_bruto = str(dados.get("fim") or "").strip()
+    fim = (
+        _data_da_agenda(fim_bruto, config)
+        if fim_bruto
+        else inicio + timedelta(minutes=_DURACAO_PADRAO_MINUTOS)
+    )
+    if fim <= inicio:
+        raise FerramentaInvalida("o fim precisa ser depois do início")
+
+    lembrete = dados.get("lembrete_minutos")
+    try:
+        minutos = int(lembrete) if lembrete is not None else 10
+    except (TypeError, ValueError) as erro:
+        raise FerramentaInvalida(
+            "lembrete_minutos precisa ser um número inteiro"
+        ) from erro
+    minutos = max(0, min(minutos, _MAX_LEMBRETE_MINUTOS))
+
+    inicio_iso = _iso_utc(inicio)
+    fim_iso = _iso_utc(fim)
+    conflito = await banco.conflito_compromisso(
+        pessoa, inicio_iso, fim_iso
+    )
+    if conflito is not None:
+        return {
+            "ok": False,
+            "conflito": _compromisso_publico(
+                conflito, config.fuso_horario
+            ),
+        }
+
+    criado = await banco.criar_compromisso(
+        pessoa,
+        {
+            "titulo": titulo,
+            "descricao": " ".join(
+                str(dados.get("descricao") or "").split()
+            )[:2000],
+            "inicio": inicio_iso,
+            "fim": fim_iso,
+            "fuso": config.fuso_horario,
+            "lembrete_minutos": minutos,
+            "lembrete_em": _iso_utc(
+                inicio - timedelta(minutes=minutos)
+            ),
+        },
+    )
+    return {
+        "ok": True,
+        "compromisso": _compromisso_publico(
+            criado, config.fuso_horario
+        ),
+    }
+
+
+async def _consultar_agenda(
+    dados: Mapping, contexto: ContextoFerramentas
+) -> dict:
+    banco, pessoa, config = _contexto_agenda(contexto)
+
+    de_bruto = str(dados.get("de") or "").strip()
+    ate_bruto = str(dados.get("ate") or "").strip()
+
+    de = (
+        _data_da_agenda(de_bruto, config)
+        if de_bruto
+        else _agora_local(config)
+    )
+    if ate_bruto:
+        ate = _data_da_agenda(ate_bruto, config)
+        if _somente_data(ate_bruto):
+            ate += timedelta(days=1)
+    else:
+        ate = de + timedelta(days=_JANELA_PADRAO_DIAS)
+    if ate <= de:
+        raise FerramentaInvalida(
+            "o fim do período precisa ser depois do início"
+        )
+
+    linhas = await banco.listar_compromissos(
+        pessoa, _iso_utc(de), _iso_utc(ate)
+    )
+    zona = ZoneInfo(config.fuso_horario)
+    return {
+        "ok": True,
+        "de": _formatar_momento(de, zona),
+        "ate": _formatar_momento(ate, zona),
+        "compromissos": [
+            _compromisso_publico(linha, config.fuso_horario)
+            for linha in linhas[:_MAX_AGENDA]
+        ],
+    }
+
+
+async def _cancelar_compromisso(
+    dados: Mapping, contexto: ContextoFerramentas
+) -> dict:
+    banco, pessoa, config = _contexto_agenda(contexto)
+
+    identificador = str(dados.get("id") or "").strip()
+    titulo = " ".join(str(dados.get("titulo") or "").split())
+
+    if identificador:
+        linha = await banco.obter_compromisso(identificador)
+        if linha is None or linha.get("pessoa_id") != pessoa:
+            return {"ok": False, "encontrado": False}
+    elif titulo:
+        chave = _normalizar_texto(titulo)
+        linhas = await banco.listar_compromissos(pessoa, None, None)
+        candidatas = [
+            item
+            for item in linhas
+            if chave
+            and (
+                chave in _normalizar_texto(item.get("titulo"))
+                or _normalizar_texto(item.get("titulo")) in chave
+            )
+        ]
+        if not candidatas:
+            return {"ok": False, "encontrado": False}
+        if len(candidatas) > 1:
+            return {
+                "ok": False,
+                "ambigua": True,
+                "candidatas": [
+                    _compromisso_publico(item, config.fuso_horario)
+                    for item in candidatas[:_MAX_AGENDA]
+                ],
+            }
+        linha = candidatas[0]
+    else:
+        raise FerramentaInvalida("informe o id ou o título do compromisso")
+
+    if not await banco.apagar_compromisso(linha["id"]):
+        return {"ok": False, "encontrado": False}
+    return {
+        "ok": True,
+        "cancelado": _compromisso_publico(
+            linha, config.fuso_horario
+        ),
     }
 
 

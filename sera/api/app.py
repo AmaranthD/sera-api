@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import asynccontextmanager, suppress
 from typing import Callable
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..prompt import carregar_personality
+from .agenda import laco_lembretes
+from .agenda import router as router_agenda
 from .auth import Autenticador, AutenticadorSupabase
 from .busca import ClienteTavily
 from .config import Config
 from .db import Banco
 from .db_supabase import BancoSupabase
+from .jobs import GerenciadorJobs
 from .jw import ClienteJW
 from .llm import ClienteGemini, ClienteLLM, ClienteOpenAICompat
 from .rotas import router
@@ -45,7 +50,24 @@ def criar_app(
 
     personality = carregar_personality(config.personality_path)
 
-    app = FastAPI(title="Sera", version="0.3.0")
+    @asynccontextmanager
+    async def ciclo(app: FastAPI):
+        tarefa = None
+        if config.agenda_ativa:
+            tarefa = asyncio.create_task(laco_lembretes(app, config))
+        yield
+        if tarefa is not None:
+            tarefa.cancel()
+            with suppress(asyncio.CancelledError):
+                await tarefa
+        await app.state.jobs.encerrar()
+        admin = app.state.banco_admin
+        if admin is not None and admin is not app.state.banco:
+            fechar = getattr(admin, "fechar", None)
+            if fechar is not None:
+                await fechar()
+
+    app = FastAPI(title="Sera", version="0.3.0", lifespan=ciclo)
 
     @app.middleware("http")
     async def sem_cache(request: Request, call_next):
@@ -57,6 +79,12 @@ def criar_app(
     app.state.config = config
     app.state.banco = banco_local
     app.state.banco_fabrica = fabrica
+    if fabrica is not None and config.supabase_service_key:
+        app.state.banco_admin = BancoSupabase(
+            config, config.supabase_service_key
+        )
+    else:
+        app.state.banco_admin = banco_local
     app.state.llm = llm or _criar_llm(config)
     if busca is not None:
         app.state.busca = busca
@@ -68,6 +96,7 @@ def criar_app(
         app.state.jw = ClienteJW(config) if config.jw_ativa else None
     app.state.personality = personality
     app.state.autenticador = autenticador
+    app.state.jobs = GerenciadorJobs()
     if config.auth_required and app.state.autenticador is None:
         app.state.autenticador = AutenticadorSupabase(config)
 
@@ -116,6 +145,7 @@ def criar_app(
         )
 
     app.include_router(router)
+    app.include_router(router_agenda)
 
     @app.get("/health")
     async def health() -> dict:

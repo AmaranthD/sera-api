@@ -4,7 +4,7 @@ export type Perfil = 'padrao' | 'crianca_adolescente' | 'idoso_ou_pouco_tecnico'
 
 export type Papel = 'user' | 'assistant'
 
-export type StatusMensagem = 'completa' | 'interrompida' | 'erro'
+export type StatusMensagem = 'gerando' | 'completa' | 'interrompida' | 'erro'
 
 export interface Pessoa {
   id: string
@@ -107,6 +107,13 @@ export interface EntradaChat {
   fonte?: 'jw'
 }
 
+export interface TrabalhoChat {
+  conversa_id: string
+  mensagem_id: string
+  resposta_id: string
+  status: 'gerando'
+}
+
 export type EventoChat =
   | { tipo: 'start'; conversaId: string; mensagemId: string }
   | { tipo: 'token'; texto: string }
@@ -119,3 +126,41 @@ export type EventoChat =
       uso: UsoLLM | null
     }
   | { tipo: 'error'; codigo: string; detalhe: string }
+
+export interface Compromisso {
+  id: string
+  pessoa_id: string
+  titulo: string
+  descricao: string
+  inicio: string
+  fim: string
+  fuso: string
+  lembrete_minutos: number
+  lembrete_em: string
+  lembrete_enviado_em: string | null
+  criado_em: string
+  atualizado_em: string
+}
+
+export interface EntradaCompromisso {
+  titulo: string
+  descricao?: string
+  inicio: string
+  fim: string
+  fuso?: string
+  lembrete_minutos?: number
+}
+
+export type AtualizacaoCompromisso = Partial<EntradaCompromisso>
+
+export interface InscricaoPush {
+  id: string
+  endpoint: string
+  criada_em?: string
+}
+
+export interface EntradaInscricaoPush {
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+  user_agent?: string
+}

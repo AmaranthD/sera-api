@@ -241,3 +241,160 @@ def test_referencia_biblica():
     assert referencia_biblica("leia João 3:16") == (43, 3, 16, None)
     assert referencia_biblica("Mt 6:34") == (40, 6, 34, None)
     assert referencia_biblica("não é uma referência") is None
+
+
+class BancoAgendaFalso:
+    def __init__(self):
+        self.compromissos: list[dict] = []
+
+    async def conflito_compromisso(
+        self, pessoa_id, inicio, fim, excluir_id=None
+    ):
+        for item in self.compromissos:
+            if item["pessoa_id"] != pessoa_id:
+                continue
+            if excluir_id and item["id"] == excluir_id:
+                continue
+            if item["inicio"] < fim and item["fim"] > inicio:
+                return item
+        return None
+
+    async def criar_compromisso(self, pessoa_id, dados):
+        item = {
+            "id": f"c{len(self.compromissos) + 1}",
+            "pessoa_id": pessoa_id,
+            **dados,
+        }
+        self.compromissos.append(item)
+        return item
+
+    async def listar_compromissos(self, pessoa_id, de=None, ate=None):
+        itens = [
+            item
+            for item in self.compromissos
+            if item["pessoa_id"] == pessoa_id
+            and (de is None or item["fim"] > de)
+            and (ate is None or item["inicio"] < ate)
+        ]
+        return sorted(itens, key=lambda item: item["inicio"])
+
+    async def obter_compromisso(self, compromisso_id):
+        return next(
+            (
+                item
+                for item in self.compromissos
+                if item["id"] == compromisso_id
+            ),
+            None,
+        )
+
+    async def apagar_compromisso(self, compromisso_id):
+        antes = len(self.compromissos)
+        self.compromissos = [
+            item
+            for item in self.compromissos
+            if item["id"] != compromisso_id
+        ]
+        return len(self.compromissos) < antes
+
+
+def _contexto_agenda(banco=None):
+    from sera.api.config import Config
+
+    return ContextoFerramentas(
+        banco=banco or BancoAgendaFalso(),
+        pessoa_id="maria",
+        config=Config(fuso_horario="America/Sao_Paulo"),
+    )
+
+
+def test_esquemas_inclui_agenda():
+    nomes = {item["function"]["name"] for item in esquemas(agenda=True)}
+    assert nomes == {
+        "agendar",
+        "consultar_agenda",
+        "cancelar_compromisso",
+    }
+
+
+async def test_agendar_cria_compromisso_em_utc():
+    contexto = _contexto_agenda()
+    resultado = await executar_ferramenta(
+        "agendar",
+        {
+            "titulo": "Consulta",
+            "inicio": "2026-11-10T14:00",
+            "fim": "2026-11-10T15:00",
+            "lembrete_minutos": 10,
+        },
+        contexto,
+    )
+
+    assert resultado["ok"] is True
+    criado = resultado["compromisso"]
+    assert criado["titulo"] == "Consulta"
+    assert criado["inicio"] == "10/11/2026 14:00"
+    salvo = contexto.banco.compromissos[0]
+    assert salvo["inicio"] == "2026-11-10T17:00:00.000000+00:00"
+    assert salvo["lembrete_em"] == "2026-11-10T16:50:00.000000+00:00"
+
+
+async def test_agendar_avisa_conflito():
+    contexto = _contexto_agenda()
+    primeiro = {
+        "titulo": "Consulta",
+        "inicio": "2026-11-10T14:00",
+        "fim": "2026-11-10T15:00",
+    }
+    await executar_ferramenta("agendar", primeiro, contexto)
+
+    resultado = await executar_ferramenta(
+        "agendar",
+        {
+            "titulo": "Dentista",
+            "inicio": "2026-11-10T14:30",
+            "fim": "2026-11-10T15:30",
+        },
+        contexto,
+    )
+
+    assert resultado["ok"] is False
+    assert resultado["conflito"]["titulo"] == "Consulta"
+    assert len(contexto.banco.compromissos) == 1
+
+
+async def test_consultar_e_cancelar_agenda_por_titulo():
+    contexto = _contexto_agenda()
+    await executar_ferramenta(
+        "agendar",
+        {
+            "titulo": "Dentista",
+            "inicio": "2026-11-10T14:00",
+            "fim": "2026-11-10T15:00",
+        },
+        contexto,
+    )
+
+    lista = await executar_ferramenta(
+        "consultar_agenda",
+        {"de": "2026-11-01", "ate": "2026-11-30"},
+        contexto,
+    )
+    assert [item["titulo"] for item in lista["compromissos"]] == [
+        "Dentista"
+    ]
+
+    cancelado = await executar_ferramenta(
+        "cancelar_compromisso", {"titulo": "dentista"}, contexto
+    )
+    assert cancelado["ok"] is True
+    assert contexto.banco.compromissos == []
+
+
+async def test_agendar_rejeita_data_invalida():
+    with pytest.raises(FerramentaInvalida):
+        await executar_ferramenta(
+            "agendar",
+            {"titulo": "Consulta", "inicio": "amanhã"},
+            _contexto_agenda(),
+        )
