@@ -9,6 +9,7 @@ import { CarregandoTela } from './componentes/Carregando'
 import { Marca } from './componentes/Marca'
 import type { Ambiente } from './env'
 import { PessoaProvider } from './pessoa/PessoaProvider'
+import { VozProvider } from './voz/VozProvider'
 import { usePessoa } from './pessoa/contexto'
 import { Agenda } from './telas/agenda/Agenda'
 import { ChatTela } from './telas/chat/ChatTela'
@@ -51,29 +52,31 @@ export function App({ ambiente }: { ambiente: Ambiente }) {
   return (
     <BrowserRouter>
       <SessaoProvider ambiente={ambiente}>
-        <PessoaProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/onboarding" element={<Onboarding />} />
-            <Route path="/instalar" element={<Instalar />} />
-            <Route element={<Protegido />}>
-              <Route path="/conta" element={<Conta />} />
-              <Route path="/agenda" element={<Agenda />} />
-              <Route
-                element={
-                  <ChatProvider>
-                    <Outlet />
-                  </ChatProvider>
-                }
-              >
-                <Route path="/" element={<ChatTela />} />
-                <Route path="/c/:conversaId" element={<ChatTela />} />
+        <VozProvider>
+          <PessoaProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/instalar" element={<Instalar />} />
+              <Route element={<Protegido />}>
+                <Route path="/conta" element={<Conta />} />
+                <Route path="/agenda" element={<Agenda />} />
+                <Route
+                  element={
+                    <ChatProvider>
+                      <Outlet />
+                    </ChatProvider>
+                  }
+                >
+                  <Route path="/" element={<ChatTela />} />
+                  <Route path="/c/:conversaId" element={<ChatTela />} />
+                </Route>
               </Route>
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-          <AtualizacaoPwa />
-        </PessoaProvider>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+            <AtualizacaoPwa />
+          </PessoaProvider>
+        </VozProvider>
       </SessaoProvider>
     </BrowserRouter>
   )

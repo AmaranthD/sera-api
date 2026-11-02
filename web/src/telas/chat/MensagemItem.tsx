@@ -1,5 +1,9 @@
+import { useEffect, useState } from 'react'
 import type { Mensagem } from '../../dominios/tipos'
 import { formatarHora } from '../../dominios/texto'
+import { Icone } from '../../componentes/Icone'
+import { assinarFala, falar, falaSuportada, pararFala } from '../../voz/falar'
+import { useVoz } from '../../voz/contexto'
 import estilos from './Chat.module.css'
 import { ListaFontes } from './ListaFontes'
 import { MensagemMarkdown } from './MensagemMarkdown'
@@ -10,6 +14,19 @@ interface Props {
 }
 
 export function MensagemItem({ mensagem, transcrevendo }: Props) {
+  const [falando, setFalando] = useState(false)
+  const [revelar, setRevelar] = useState(false)
+  const { modo } = useVoz()
+  const podeFalar = falaSuportada()
+
+  useEffect(
+    () =>
+      assinarFala((estado) =>
+        setFalando(estado.falando && estado.id === mensagem.id),
+      ),
+    [mensagem.id],
+  )
+
   const data = new Date(mensagem.criada_em)
   const dataCompleta = Number.isNaN(data.getTime())
     ? ''
@@ -38,6 +55,7 @@ export function MensagemItem({ mensagem, transcrevendo }: Props) {
   }
 
   const vazia = mensagem.conteudo.length === 0
+  const somenteAudio = modo === 'so-audio' && !transcrevendo && !vazia
   const fontesNoTexto =
     /(^|\n)\s*#{1,6}\s*fontes\b/i.test(mensagem.conteudo) &&
     /https?:\/\//i.test(mensagem.conteudo)
@@ -54,13 +72,27 @@ export function MensagemItem({ mensagem, transcrevendo }: Props) {
               <span className={estilos.ponto} />
               <span className={estilos.ponto} />
             </span>
+          ) : somenteAudio && !revelar ? (
+            <div className={estilos.somenteAudio}>
+              <span>
+                <Icone nome="ouvir" tamanho={15} />
+                Resposta em áudio
+              </span>
+              <button
+                type="button"
+                className={estilos.mostrarTexto}
+                onClick={() => setRevelar(true)}
+              >
+                Mostrar texto
+              </button>
+            </div>
           ) : (
             <>
               <MensagemMarkdown texto={mensagem.conteudo} />
               {transcrevendo && !vazia ? (
                 <span className={estilos.cursor} aria-hidden="true" />
               ) : null}
-              {!transcrevendo && !fontesNoTexto ? (
+              {!transcrevendo && !fontesNoTexto && (!somenteAudio || revelar) ? (
                 <ListaFontes fontes={mensagem.fontes} />
               ) : null}
             </>
@@ -70,6 +102,23 @@ export function MensagemItem({ mensagem, transcrevendo }: Props) {
           <time dateTime={mensagem.criada_em} title={dataCompleta}>
             {formatarHora(mensagem.criada_em)}
           </time>
+          {!transcrevendo && !vazia && podeFalar ? (
+            <button
+              type="button"
+              className={`${estilos.botaoOuvir} ${
+                falando ? estilos.botaoOuvirAtivo : ''
+              }`}
+              onClick={() =>
+                falando
+                  ? pararFala()
+                  : falar(mensagem.conteudo, { id: mensagem.id })
+              }
+              aria-label={falando ? 'Parar leitura' : 'Ouvir resposta'}
+              title={falando ? 'Parar leitura' : 'Ouvir resposta'}
+            >
+              <Icone nome={falando ? 'parar' : 'ouvir'} tamanho={14} />
+            </button>
+          ) : null}
           {mensagem.status === 'interrompida' ? (
             <span className={estilos.avisoMensagem}>resposta interrompida</span>
           ) : null}

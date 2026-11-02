@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { Mensagem } from '../../dominios/tipos'
+import { VozProvider } from '../../voz/VozProvider'
 import { MensagemItem } from './MensagemItem'
 
 const CRIADA_EM = new Date(2026, 0, 2, 9, 5).toISOString()
@@ -175,5 +177,25 @@ describe('MensagemItem sem duplicar fontes', () => {
       'href',
       'https://www.jw.org/finder?bible=1',
     )
+  })
+})
+
+
+describe('MensagemItem no modo só áudio', () => {
+  it('esconde o texto e oferece mostrá-lo', async () => {
+    window.localStorage.setItem('sera:modo-voz', 'so-audio')
+    const usuario = userEvent.setup()
+    render(
+      <VozProvider>
+        <MensagemItem mensagem={mensagem()} transcrevendo={false} />
+      </VozProvider>,
+    )
+
+    expect(screen.queryByText('Olá, Maria!')).not.toBeInTheDocument()
+    expect(screen.getByText('Resposta em áudio')).toBeInTheDocument()
+
+    await usuario.click(screen.getByRole('button', { name: 'Mostrar texto' }))
+    expect(screen.getByText('Olá, Maria!')).toBeInTheDocument()
+    window.localStorage.clear()
   })
 })

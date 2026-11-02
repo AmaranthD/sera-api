@@ -822,3 +822,111 @@
     padding: 0 14px 8px;
   }
 }
+
+.botaoOuvir {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--chat-texto-fraco);
+  cursor: pointer;
+}
+
+.botaoOuvir:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chat-ouro);
+}
+
+.botaoOuvirAtivo {
+  color: var(--chat-ouro);
+}
+
+.microfone {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 2px solid var(--chat-linha-forte);
+  border-radius: var(--raio-pequeno);
+  background: transparent;
+  color: var(--chat-texto-fraco);
+}
+
+.microfone:hover:not(:disabled) {
+  border-color: var(--chat-ouro);
+  color: var(--chat-texto);
+}
+
+.microfoneAtivo {
+  border-color: var(--perigo);
+  background: rgba(220, 38, 38, 0.12);
+  color: var(--perigo);
+}
+
+.microfone:disabled {
+  opacity: 0.5;
+}
+
+.botaoVoz {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  flex: none;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--raio-pequeno);
+  background: transparent;
+  color: var(--chat-texto-fraco);
+  font-size: 12px;
+}
+
+.botaoVoz:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--chat-texto);
+}
+
+.botaoVozAtivo {
+  color: var(--chat-ouro);
+}
+
+.rotuloVoz {
+  display: none;
+}
+
+@media (min-width: 700px) {
+  .rotuloVoz {
+    display: inline;
+  }
+}
+
+.somenteAudio {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--chat-texto-fraco);
+  font-size: 13px;
+}
+
+.somenteAudio > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mostrarTexto {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--chat-ouro);
+  font-size: 12.5px;
+  text-decoration: underline;
+  cursor: pointer;
+}

@@ -16,6 +16,8 @@ export type NomeIcone =
   | 'atualizar'
   | 'escudo'
   | 'relogio'
+  | 'microfone'
+  | 'ouvir'
 
 const CAMINHOS: Record<NomeIcone, React.ReactNode> = {
   mais: <path d="M12 5v14M5 12h14" />,
@@ -66,6 +68,18 @@ const CAMINHOS: Record<NomeIcone, React.ReactNode> = {
     <>
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 2" />
+    </>
+  ),
+  microfone: (
+    <>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" />
+    </>
+  ),
+  ouvir: (
+    <>
+      <path d="M11 5 6 9H3v6h3l5 4V5Z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8 8 0 0 1 0 12" />
     </>
   ),
 }

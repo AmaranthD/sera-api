@@ -70,12 +70,28 @@ src/
 │   ├── chat/                # shell, lista, drawer, mensagens, composer
 │   └── conta/
 ├── pwa/                     # online/offline e instalação
+├── voz/                     # Web Speech API (falar respostas e ditar)
 └── estilos/global.css       # tokens, reset e utilidades
 ```
 
 Regra de dependência: `telas → contexto/providers → api`; nada em `api/`
 importa React. O parser SSE e as funções de domínio são testáveis sem
 navegador.
+
+## Voz
+
+- **Modo de voz**: o botão no cabeçalho alterna `desligado` → `voz on`
+  (lê cada resposta automaticamente) → `só áudio` (lê e esconde o texto, com
+  botão "Mostrar texto"). A escolha fica no `localStorage`.
+- **Ouvir resposta**: cada resposta da Sera tem um botão que lê o texto com
+  `speechSynthesis`, preferindo voz pt-BR local (Francisca, Thalita etc.).
+- **Ditar mensagem**: o microfone do Composer usa `SpeechRecognition`
+  (`webkitSpeechRecognition` no Safari). O texto é anexado ao rascunho e você
+  revisa antes de enviar.
+- O reconhecimento pode enviar o áudio para o serviço do navegador; por isso
+  o app pede consentimento uma vez e não grava nem guarda áudio.
+- Onde a API não existe (Firefox, por exemplo), os botões somem e o chat
+  continua normal. Nenhum backend ou chave nova é necessário.
 
 ## Contrato do chat
 

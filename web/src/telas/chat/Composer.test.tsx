@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Composer } from './Composer'
 
 function montar(extra: Partial<Parameters<typeof Composer>[0]> = {}) {
@@ -17,6 +17,34 @@ function montar(extra: Partial<Parameters<typeof Composer>[0]> = {}) {
   }
   render(<Composer {...props} />)
   return { props, usuario: userEvent.setup() }
+}
+
+afterEach(() => {
+  delete (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition
+  vi.restoreAllMocks()
+  window.localStorage.clear()
+})
+
+class ReconhecedorFalso {
+  static ultimo: ReconhecedorFalso | null = null
+  lang = ''
+  continuous = false
+  interimResults = false
+  onresult: ((evento: unknown) => void) | null = null
+  onerror: ((evento: unknown) => void) | null = null
+  onend: (() => void) | null = null
+
+  constructor() {
+    ReconhecedorFalso.ultimo = this
+  }
+
+  start() {}
+
+  stop() {
+    this.onend?.()
+  }
+
+  abort() {}
 }
 
 describe('Composer', () => {
@@ -92,5 +120,28 @@ describe('Composer no modo JW', () => {
   it('desabilita o botão JW sem conexão', () => {
     montar({ online: false })
     expect(screen.getByRole('button', { name: 'Ativar modo JW' })).toBeDisabled()
+  })
+})
+
+
+describe('Composer com voz', () => {
+  it('dita e anexa o texto ao rascunho', async () => {
+    ;(window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition =
+      ReconhecedorFalso
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    const { props, usuario } = montar()
+    await usuario.click(screen.getByRole('button', { name: 'Ditar mensagem' }))
+
+    expect(ReconhecedorFalso.ultimo).not.toBeNull()
+    ReconhecedorFalso.ultimo?.onresult?.({
+      resultIndex: 0,
+      results: {
+        length: 1,
+        0: { isFinal: true, 0: { transcript: 'olá mundo' } },
+      },
+    })
+
+    expect(props.aoMudar).toHaveBeenCalledWith('Oi, Sera olá mundo')
   })
 })

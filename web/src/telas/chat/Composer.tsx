@@ -1,6 +1,13 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LIMITE_MENSAGEM } from '../../dominios/texto'
 import { Icone } from '../../componentes/Icone'
+import {
+  confirmarUsoDaVoz,
+  mensagemDeErroVoz,
+  ouvir,
+  reconhecimentoSuportado,
+  type Ouvinte,
+} from '../../voz/ouvir'
 import estilos from './Chat.module.css'
 
 interface Props {
@@ -27,6 +34,12 @@ export function Composer({
   aviso,
 }: Props) {
   const referencia = useRef<HTMLTextAreaElement>(null)
+  const [ouvindo, setOuvindo] = useState(false)
+  const [erroVoz, setErroVoz] = useState<string | null>(null)
+  const ouvinteRef = useRef<Ouvinte | null>(null)
+  const baseRef = useRef('')
+  const finalRef = useRef('')
+  const suportaVoz = reconhecimentoSuportado()
 
   useEffect(() => {
     const campo = referencia.current
@@ -35,10 +48,55 @@ export function Composer({
     campo.style.height = `${Math.min(campo.scrollHeight, 180)}px`
   }, [valor])
 
+  useEffect(() => () => ouvinteRef.current?.parar(), [])
+
+  const pararDitado = () => {
+    ouvinteRef.current?.parar()
+    ouvinteRef.current = null
+    setOuvindo(false)
+  }
+
+  const alternarDitado = () => {
+    if (ouvindo) {
+      pararDitado()
+      return
+    }
+    if (!online || ocupado) return
+    if (!confirmarUsoDaVoz()) return
+
+    setErroVoz(null)
+    baseRef.current = valor.trim()
+    finalRef.current = ''
+    const ouvinte = ouvir({
+      aoTexto: (texto, final) => {
+        if (final) finalRef.current = `${finalRef.current} ${texto}`.trim()
+        const partes = [baseRef.current, finalRef.current]
+        if (!final) partes.push(texto)
+        aoMudar(partes.filter(Boolean).join(' '))
+      },
+      aoErro: (erro) => {
+        setErroVoz(mensagemDeErroVoz(erro))
+        ouvinteRef.current = null
+        setOuvindo(false)
+      },
+      aoFim: () => {
+        ouvinteRef.current = null
+        setOuvindo(false)
+      },
+    })
+    if (!ouvinte) {
+      setErroVoz('Reconhecimento de voz indisponível neste navegador.')
+      return
+    }
+    ouvinteRef.current = ouvinte
+    setOuvindo(true)
+  }
+
   const podeEnviar = online && !ocupado && valor.trim().length > 0
 
   const enviar = () => {
     if (!podeEnviar) return
+    if (ouvindo) pararDitado()
     aoEnviar(valor)
   }
 
@@ -62,11 +120,13 @@ export function Composer({
           rows={1}
           maxLength={LIMITE_MENSAGEM}
           placeholder={
-            !online
-              ? 'Sem conexão. Sua mensagem fica aqui.'
-              : modoJw
-                ? 'Pergunte sobre a Bíblia ou publicações JW…'
-                : 'Escreva para a Sera…'
+            ouvindo
+              ? 'Ouvindo… fale agora'
+              : !online
+                ? 'Sem conexão. Sua mensagem fica aqui.'
+                : modoJw
+                  ? 'Pergunte sobre a Bíblia ou publicações JW…'
+                  : 'Escreva para a Sera…'
           }
           value={valor}
           disabled={!online || ocupado}
@@ -82,6 +142,25 @@ export function Composer({
             }
           }}
         />
+        {suportaVoz ? (
+          <button
+            type="button"
+            className={`${estilos.microfone} ${
+              ouvindo ? estilos.microfoneAtivo : ''
+            }`}
+            aria-pressed={ouvindo}
+            aria-label={ouvindo ? 'Parar ditado' : 'Ditar mensagem'}
+            title={
+              ouvindo
+                ? 'Parar ditado'
+                : 'Ditar mensagem (o áudio pode ir para o serviço do navegador)'
+            }
+            disabled={!online || ocupado}
+            onClick={alternarDitado}
+          >
+            <Icone nome={ouvindo ? 'parar' : 'microfone'} tamanho={18} />
+          </button>
+        ) : null}
         <button
           type="button"
           className={`${estilos.modoJw} ${modoJw ? estilos.modoJwAtivo : ''}`}
@@ -120,12 +199,13 @@ export function Composer({
         )}
       </form>
       <div className={estilos.composerRodape}>
-        <span>
-          {!online
-            ? 'Sem conexão para enviar.'
-            : modoJw
-              ? 'Modo JW · só Bíblia e publicações JW'
-              : 'Enter envia · Shift + Enter quebra a linha'}
+        <span role={erroVoz ? 'status' : undefined}>
+          {erroVoz ??
+            (!online
+              ? 'Sem conexão para enviar.'
+              : modoJw
+                ? 'Modo JW · só Bíblia e publicações JW'
+                : 'Enter envia · Shift + Enter quebra a linha')}
         </span>
         {valor.length > 7000 ? (
           <span className={estilos.contador}>

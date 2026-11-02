@@ -8,6 +8,7 @@ import { iniciais, tituloDaConversa } from '../../dominios/texto'
 import { Banner } from '../../componentes/Banner'
 import { Icone } from '../../componentes/Icone'
 import { useOnline } from '../../pwa/usePwa'
+import { useVoz } from '../../voz/contexto'
 import { AvisoAcordando } from './AvisoAcordando'
 import { Composer } from './Composer'
 import { ConteudoLateral } from './ConteudoLateral'
@@ -33,6 +34,7 @@ export function ChatTela() {
   const { api } = useSessao()
   const online = useOnline()
 
+  const { modo: modoVoz, alternar: alternarVoz } = useVoz()
   const [drawerAberto, setDrawerAberto] = useState(false)
   const [rascunho, setRascunho] = useState('')
   const [modoJw, setModoJw] = useState(false)
@@ -46,6 +48,18 @@ export function ChatTela() {
   }, [api])
 
   const ocupado = status === 'enviando' || status === 'transmitindo'
+  const rotuloVoz =
+    modoVoz === 'so-audio'
+      ? 'Só áudio'
+      : modoVoz === 'voz'
+        ? 'Voz on'
+        : 'Voz'
+  const tituloVoz =
+    modoVoz === 'so-audio'
+      ? 'Só áudio: as respostas são lidas e o texto fica oculto'
+      : modoVoz === 'voz'
+        ? 'Lendo as respostas em voz alta'
+        : 'Voz desligada'
   const titulo = conversaAtual
     ? tituloDaConversa(conversaAtual)
     : conversaId
@@ -105,6 +119,20 @@ export function ChatTela() {
             <h1 className={estilos.cabecalhoTitulo}>{titulo}</h1>
             <p className={estilos.cabecalhoSub}>com Sera</p>
           </div>
+
+          <button
+            type="button"
+            className={`${estilos.botaoVoz} ${
+              modoVoz !== 'desligado' ? estilos.botaoVozAtivo : ''
+            }`}
+            aria-pressed={modoVoz !== 'desligado'}
+            aria-label={`Modo de voz: ${tituloVoz}. Toque para alternar.`}
+            title={`${tituloVoz} — toque para alternar`}
+            onClick={alternarVoz}
+          >
+            <Icone nome="ouvir" tamanho={18} />
+            <span className={estilos.rotuloVoz}>{rotuloVoz}</span>
+          </button>
 
           <Link
             to="/agenda"
