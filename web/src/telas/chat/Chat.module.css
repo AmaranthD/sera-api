@@ -846,15 +846,29 @@
 }
 
 .microfone {
-  display: grid;
-  place-items: center;
-  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
   height: 44px;
   flex: none;
+  padding: 0 9px;
   border: 2px solid var(--chat-linha-forte);
   border-radius: var(--raio-pequeno);
   background: transparent;
   color: var(--chat-texto-fraco);
+  font-size: 12.5px;
+}
+
+.rotuloMicrofone {
+  display: none;
+}
+
+@media (min-width: 560px) {
+  .rotuloMicrofone {
+    display: inline;
+  }
 }
 
 .microfone:hover:not(:disabled) {

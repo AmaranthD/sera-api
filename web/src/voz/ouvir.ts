@@ -170,5 +170,8 @@ export function mensagemDeErroVoz(erro: string): string {
   if (erro === 'network') return 'Sem conexão para o reconhecimento de voz.'
   if (erro === 'no-speech') return 'Não ouvi nada. Tente de novo.'
   if (erro === 'timeout') return 'O microfone não iniciou. Confira a permissão do site.'
+  if (erro === 'timeout-permissao') {
+    return 'Não recebi a permissão do microfone. Confira as permissões do site.'
+  }
   return 'Não consegui ouvir. Tente de novo.'
 }

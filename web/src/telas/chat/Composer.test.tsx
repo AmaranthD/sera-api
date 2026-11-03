@@ -128,6 +128,10 @@ describe('Composer com voz', () => {
   it('dita e anexa o texto ao rascunho', async () => {
     ;(window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition =
       ReconhecedorFalso
+    Object.defineProperty(window, 'isSecureContext', {
+      value: true,
+      configurable: true,
+    })
 
     const { props, usuario } = montar()
     await usuario.click(screen.getByRole('button', { name: 'Ditar mensagem' }))

@@ -39,6 +39,7 @@ export function Composer({
   const [erroVoz, setErroVoz] = useState<string | null>(null)
   const [avisoDitado, setAvisoDitado] = useState<string | null>(null)
   const [pedirConsentimento, setPedirConsentimento] = useState(false)
+  const [pedindoMicrofone, setPedindoMicrofone] = useState(false)
   const ouvinteRef = useRef<Ouvinte | null>(null)
   const baseRef = useRef('')
   const finalRef = useRef('')
@@ -61,22 +62,40 @@ export function Composer({
   }
 
   async function pedirMicrofone(): Promise<boolean> {
+    if (!window.isSecureContext) {
+      setErroVoz('O microfone exige uma conexão segura (HTTPS).')
+      return false
+    }
     if (!navigator.mediaDevices?.getUserMedia) return true
+    const limite = new Promise<never>((_, rejeitar) => {
+      window.setTimeout(
+        () => rejeitar(new DOMException('tempo esgotado', 'TimeoutError')),
+        12_000,
+      )
+    })
     try {
-      const fluxo = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      })
+      const fluxo = await Promise.race([
+        navigator.mediaDevices.getUserMedia({ audio: true }),
+        limite,
+      ])
       for (const faixa of fluxo.getTracks()) faixa.stop()
       return true
     } catch (erro) {
       const nome = erro instanceof DOMException ? erro.name : 'audio-capture'
-      setErroVoz(mensagemDeErroVoz(nome))
+      setErroVoz(
+        mensagemDeErroVoz(
+          nome === 'TimeoutError' ? 'timeout-permissao' : nome,
+        ),
+      )
       return false
     }
   }
 
   const iniciarDitado = async () => {
-    if (!(await pedirMicrofone())) return
+    setPedindoMicrofone(true)
+    const liberado = await pedirMicrofone()
+    setPedindoMicrofone(false)
+    if (!liberado) return
 
     setErroVoz(null)
     setAvisoDitado(null)
@@ -120,7 +139,14 @@ export function Composer({
       pararDitado()
       return
     }
-    if (!online || ocupado) return
+    if (!online) {
+      setErroVoz('Sem conexão para usar o microfone.')
+      return
+    }
+    if (ocupado) {
+      setErroVoz('Espere a resposta terminar para ditar.')
+      return
+    }
     if (!temConsentimentoVoz()) {
       setPedirConsentimento(true)
       return
@@ -209,8 +235,10 @@ export function Composer({
           rows={1}
           maxLength={LIMITE_MENSAGEM}
           placeholder={
-            ouvindo
-              ? 'Ouvindo… fale agora'
+            pedindoMicrofone
+              ? 'Pedindo permissão do microfone…'
+              : ouvindo
+                ? 'Ouvindo… fale agora'
               : !online
                 ? 'Sem conexão. Sua mensagem fica aqui.'
                 : modoJw
@@ -247,10 +275,12 @@ export function Composer({
                 ? 'Parar ditado'
                 : 'Ditar mensagem (o áudio pode ir para o serviço do navegador)'
             }
-            disabled={!online || ocupado}
+            disabled={!online || ocupado || pedindoMicrofone}
+            aria-busy={pedindoMicrofone}
             onClick={alternarDitado}
           >
             <Icone nome={ouvindo ? 'parar' : 'microfone'} tamanho={18} />
+            <span className={estilos.rotuloMicrofone}>Ditar</span>
           </button>
         ) : null}
         <button
@@ -292,7 +322,9 @@ export function Composer({
       </form>
       <div className={estilos.composerRodape}>
         <span role={erroVoz ? 'status' : undefined}>
-          {avisoDitado ??
+          {pedindoMicrofone
+            ? 'Pedindo permissão do microfone…'
+            : avisoDitado ??
             (!online
               ? 'Sem conexão para enviar.'
               : modoJw
