@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Botao } from '../../componentes/Botao'
 import { Icone } from '../../componentes/Icone'
 import { mensagemDeErroVoz, ouvir, reconhecimentoSuportado, type Ouvinte } from '../../voz/ouvir'
+import { useInstalacao } from '../../pwa/usePwa'
 import {
   consultarPermissaoMicrofone,
   pedirPermissaoMicrofone,
@@ -26,6 +27,7 @@ export function SecaoMicrofone() {
   const [aviso, setAviso] = useState<string | null>(null)
   const ouvinteRef = useRef<Ouvinte | null>(null)
   const suporta = reconhecimentoSuportado()
+  const { ehIOS } = useInstalacao()
   const temMicrofone =
     typeof navigator !== 'undefined' && 'mediaDevices' in navigator
 
@@ -140,6 +142,50 @@ export function SecaoMicrofone() {
 
       {erro ? <p className={estilos.secaoTexto}>{erro}</p> : null}
       {aviso ? <p className={estilos.secaoTexto}>{aviso}</p> : null}
+
+      {estado === 'denied' ? (
+        <div className={estilos.avisoPermissao}>
+          <p className={estilos.secaoTexto}>
+            <strong>O navegador está bloqueando o microfone.</strong> Depois
+            de uma negativa, o site não consegue pedir a permissão de novo
+            sozinho; ela precisa ser liberada nas configurações.
+          </p>
+          {ehIOS ? (
+            <ol className={estilos.passos}>
+              <li>
+                No Safari, toque em <strong>aA</strong> na barra de endereço →{' '}
+                <strong>Ajustes do site</strong> → <strong>Microfone</strong> →{' '}
+                <strong>Permitir</strong>.
+              </li>
+              <li>
+                Ou em <strong>Ajustes do iOS → Sera</strong> (ou{' '}
+                <strong>Safari</strong>) → <strong>Microfone</strong> e libere.
+              </li>
+              <li>
+                Se a Sera estiver na tela inicial, feche o app e abra de novo;
+                se necessário, remova e adicione outra vez.
+              </li>
+            </ol>
+          ) : (
+            <ol className={estilos.passos}>
+              <li>
+                Toque no <strong>cadeado/ícone de ajustes</strong> ao lado do
+                endereço → <strong>Permissões</strong> →{' '}
+                <strong>Microfone</strong> → <strong>Permitir</strong>.
+              </li>
+              <li>
+                Ou em <strong>Ajustes do Chrome → Configurações do site →
+                Microfone</strong> e permita para este site.
+              </li>
+              <li>
+                Se o Chrome estiver bloqueado no aparelho: <strong>Ajustes do
+                Android → Apps → Chrome → Permissões → Microfone</strong>.
+              </li>
+              <li>Recarregue a página e toque em “Tentar de novo”.</li>
+            </ol>
+          )}
+        </div>
+      ) : null}
       {transcricao ? (
         <p className={estilos.secaoTexto}>
           <strong>Ouvi:</strong> {transcricao}
@@ -153,7 +199,11 @@ export function SecaoMicrofone() {
           icone={<Icone nome="microfone" tamanho={17} />}
           onClick={() => void permitir()}
         >
-          {estado === 'granted' ? 'Revalidar microfone' : 'Permitir microfone'}
+          {estado === 'granted'
+            ? 'Revalidar microfone'
+            : estado === 'denied'
+              ? 'Tentar de novo'
+              : 'Permitir microfone'}
         </Botao>
 
         {suporta ? (
