@@ -2,10 +2,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LIMITE_MENSAGEM } from '../../dominios/texto'
 import { Icone } from '../../componentes/Icone'
 import {
-  confirmarUsoDaVoz,
   mensagemDeErroVoz,
   ouvir,
   reconhecimentoSuportado,
+  registrarConsentimentoVoz,
+  temConsentimentoVoz,
   type Ouvinte,
 } from '../../voz/ouvir'
 import estilos from './Chat.module.css'
@@ -37,6 +38,7 @@ export function Composer({
   const [ouvindo, setOuvindo] = useState(false)
   const [erroVoz, setErroVoz] = useState<string | null>(null)
   const [avisoDitado, setAvisoDitado] = useState<string | null>(null)
+  const [pedirConsentimento, setPedirConsentimento] = useState(false)
   const ouvinteRef = useRef<Ouvinte | null>(null)
   const baseRef = useRef('')
   const finalRef = useRef('')
@@ -58,19 +60,30 @@ export function Composer({
     setOuvindo(false)
   }
 
-  const alternarDitado = () => {
-    if (ouvindo) {
-      pararDitado()
-      return
+  async function pedirMicrofone(): Promise<boolean> {
+    if (!navigator.mediaDevices?.getUserMedia) return true
+    try {
+      const fluxo = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      })
+      for (const faixa of fluxo.getTracks()) faixa.stop()
+      return true
+    } catch (erro) {
+      const nome = erro instanceof DOMException ? erro.name : 'audio-capture'
+      setErroVoz(mensagemDeErroVoz(nome))
+      return false
     }
-    if (!online || ocupado) return
-    if (!confirmarUsoDaVoz()) return
+  }
+
+  const iniciarDitado = async () => {
+    if (!(await pedirMicrofone())) return
 
     setErroVoz(null)
     setAvisoDitado(null)
     baseRef.current = valor.trim()
     finalRef.current = ''
     teveTextoRef.current = false
+    setOuvindo(true)
     const ouvinte = ouvir({
       aoTexto: (texto, final) => {
         teveTextoRef.current = true
@@ -95,11 +108,30 @@ export function Composer({
       },
     })
     if (!ouvinte) {
+      setOuvindo(false)
       setErroVoz('Reconhecimento de voz indisponível neste navegador.')
       return
     }
     ouvinteRef.current = ouvinte
-    setOuvindo(true)
+  }
+
+  const alternarDitado = () => {
+    if (ouvindo) {
+      pararDitado()
+      return
+    }
+    if (!online || ocupado) return
+    if (!temConsentimentoVoz()) {
+      setPedirConsentimento(true)
+      return
+    }
+    void iniciarDitado()
+  }
+
+  const permitirVoz = () => {
+    registrarConsentimentoVoz()
+    setPedirConsentimento(false)
+    void iniciarDitado()
   }
 
   const podeEnviar = online && !ocupado && valor.trim().length > 0
@@ -113,6 +145,34 @@ export function Composer({
   return (
     <div className={estilos.composerArea}>
       {aviso}
+      {pedirConsentimento ? (
+        <div
+          className={estilos.consentimentoVoz}
+          role="dialog"
+          aria-label="Permissão para usar o microfone"
+        >
+          <p>
+            Para ditar, o navegador vai ouvir o microfone e pode enviar o
+            áudio para o serviço dele. A Sera não grava nem guarda áudio.
+          </p>
+          <div className={estilos.consentimentoAcoes}>
+            <button
+              type="button"
+              className={estilos.consentimentoPermitir}
+              onClick={permitirVoz}
+            >
+              Permitir
+            </button>
+            <button
+              type="button"
+              className={estilos.consentimentoCancelar}
+              onClick={() => setPedirConsentimento(false)}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
       <form
         className={estilos.composer}
         onSubmit={(evento) => {

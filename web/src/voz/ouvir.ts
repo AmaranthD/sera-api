@@ -19,6 +19,8 @@ interface Reconhecedor {
   lang: string
   continuous: boolean
   interimResults: boolean
+  maxAlternatives: number
+  onstart: (() => void) | null
   onresult: ((evento: EventoResultado) => void) | null
   onerror: ((evento: EventoErro) => void) | null
   onend: (() => void) | null
@@ -40,6 +42,7 @@ function construtor(): ConstrutorReconhecedor | null {
 
 export interface OpcoesOuvir {
   aoTexto: (texto: string, final: boolean) => void
+  aoIniciar?: () => void
   aoErro?: (erro: string) => void
   aoFim?: () => void
 }
@@ -54,22 +57,21 @@ export function reconhecimentoSuportado(): boolean {
 
 const CHAVE_AVISO = 'sera:voz-aviso'
 
-/**
- * O Web Speech API usa o serviço do navegador; em alguns navegadores o áudio
- * sai do dispositivo. Pede consentimento uma única vez por navegador.
- */
-export function confirmarUsoDaVoz(): boolean {
+/** O consentimento é guardado só neste navegador. */
+export function temConsentimentoVoz(): boolean {
   if (typeof window === 'undefined') return false
   try {
-    if (window.localStorage.getItem(CHAVE_AVISO) === 'ok') return true
-    const aceito = window.confirm(
-      'Para ditar, o navegador vai ouvir o microfone e pode enviar o áudio ' +
-        'para o serviço dele. Nenhum áudio é gravado pela Sera. Continuar?',
-    )
-    if (aceito) window.localStorage.setItem(CHAVE_AVISO, 'ok')
-    return aceito
+    return window.localStorage.getItem(CHAVE_AVISO) === 'ok'
   } catch {
     return true
+  }
+}
+
+export function registrarConsentimentoVoz(): void {
+  try {
+    window.localStorage.setItem(CHAVE_AVISO, 'ok')
+  } catch {
+    // Sem localStorage, vale só para esta sessão.
   }
 }
 
@@ -79,10 +81,35 @@ export function ouvir(opcoes: OpcoesOuvir): Ouvinte | null {
 
   const reconhecedor = new Ctor()
   reconhecedor.lang = 'pt-BR'
-  reconhecedor.continuous = true
+  // Uma frase por vez é bem mais compatível que contínuo no iOS/Android.
+  reconhecedor.continuous = false
   reconhecedor.interimResults = true
+  reconhecedor.maxAlternatives = 1
 
   let ativo = true
+  let iniciado = false
+  const limite = window.setTimeout(() => {
+    if (iniciado) return
+    opcoes.aoErro?.('timeout')
+    try {
+      reconhecedor.abort()
+    } catch {
+      // Ignora: o navegador pode já ter encerrado.
+    }
+  }, 5000)
+
+  const encerrar = () => {
+    window.clearTimeout(limite)
+    if (!ativo) return
+    ativo = false
+    opcoes.aoFim?.()
+  }
+
+  reconhecedor.onstart = () => {
+    iniciado = true
+    window.clearTimeout(limite)
+    opcoes.aoIniciar?.()
+  }
 
   reconhecedor.onresult = (evento) => {
     let final = ''
@@ -99,25 +126,24 @@ export function ouvir(opcoes: OpcoesOuvir): Ouvinte | null {
   }
 
   reconhecedor.onerror = (evento) => {
+    window.clearTimeout(limite)
     if (evento.error !== 'aborted' && evento.error !== 'no-speech') {
       opcoes.aoErro?.(evento.error)
     }
   }
 
-  reconhecedor.onend = () => {
-    if (!ativo) return
-    ativo = false
-    opcoes.aoFim?.()
-  }
+  reconhecedor.onend = encerrar
 
   try {
     reconhecedor.start()
   } catch {
+    window.clearTimeout(limite)
     return null
   }
 
   return {
     parar: () => {
+      window.clearTimeout(limite)
       if (!ativo) return
       ativo = false
       try {
@@ -135,7 +161,14 @@ export function mensagemDeErroVoz(erro: string): string {
     return 'Permissão de microfone negada. Libere nas permissões do site.'
   }
   if (erro === 'audio-capture') return 'Nenhum microfone encontrado.'
+  if (erro === 'NotFoundError' || erro === 'DevicesNotFoundError') {
+    return 'Nenhum microfone encontrado.'
+  }
+  if (erro === 'NotReadableError') {
+    return 'O microfone está sendo usado por outro aplicativo.'
+  }
   if (erro === 'network') return 'Sem conexão para o reconhecimento de voz.'
   if (erro === 'no-speech') return 'Não ouvi nada. Tente de novo.'
+  if (erro === 'timeout') return 'O microfone não iniciou. Confira a permissão do site.'
   return 'Não consegui ouvir. Tente de novo.'
 }

@@ -930,3 +930,50 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+.consentimentoVoz {
+  width: min(840px, 100%);
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--chat-linha-forte);
+  border-left: 3px solid var(--chat-ouro);
+  border-radius: var(--raio-pequeno);
+  background: var(--chat-superficie);
+  color: var(--chat-texto);
+  font-size: 12.5px;
+}
+
+.consentimentoVoz p {
+  flex: 1 1 320px;
+  margin: 0;
+}
+
+.consentimentoAcoes {
+  display: flex;
+  gap: 8px;
+}
+
+.consentimentoPermitir,
+.consentimentoCancelar {
+  padding: 7px 12px;
+  border-radius: var(--raio-pequeno);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.consentimentoPermitir {
+  border: 1px solid var(--chat-ouro);
+  background: var(--chat-ouro);
+  color: #1a1408;
+}
+
+.consentimentoCancelar {
+  border: 1px solid var(--chat-linha-forte);
+  background: transparent;
+  color: var(--chat-texto-fraco);
+}

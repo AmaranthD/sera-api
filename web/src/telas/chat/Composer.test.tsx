@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Composer } from './Composer'
@@ -128,12 +128,12 @@ describe('Composer com voz', () => {
   it('dita e anexa o texto ao rascunho', async () => {
     ;(window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition =
       ReconhecedorFalso
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     const { props, usuario } = montar()
     await usuario.click(screen.getByRole('button', { name: 'Ditar mensagem' }))
+    await usuario.click(screen.getByRole('button', { name: 'Permitir' }))
 
-    expect(ReconhecedorFalso.ultimo).not.toBeNull()
+    await waitFor(() => expect(ReconhecedorFalso.ultimo).not.toBeNull())
     ReconhecedorFalso.ultimo?.onresult?.({
       resultIndex: 0,
       results: {
