@@ -111,6 +111,11 @@ export class ClienteHttp {
     const corpo = await corpoJson(resposta)
     return corpo as T
   }
+
+  async blob(caminho: string, opcoes: OpcoesHttp = {}): Promise<Blob> {
+    const resposta = await this.abrir(caminho, opcoes)
+    return resposta.blob()
+  }
 }
 
 export { ErroApi }

@@ -91,7 +91,13 @@ navegador.
 - O reconhecimento pode enviar o áudio para o serviço do navegador; por isso
   o app pede consentimento uma vez e não grava nem guarda áudio.
 - Onde a API não existe (Firefox, por exemplo), os botões somem e o chat
-  continua normal. Nenhum backend ou chave nova é necessário.
+  continua normal.
+- **Voz neural (opcional)**: o botão `Neural` usa o endpoint `/tts`
+  (Edge-TTS, voz `pt-BR-FranciscaNeural`). Só é ativado depois de um aviso
+  explícito, porque o texto da resposta vai para o serviço de voz da
+  Microsoft. Se o backend estiver desligado ou falhar, cai na voz do
+  aparelho. Configure no servidor com `TTS_HABILITADO=true`, `TTS_VOZ`,
+  `TTS_RATE` e `TTS_PITCH`.
 
 ## Contrato do chat
 

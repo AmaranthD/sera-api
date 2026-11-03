@@ -85,6 +85,11 @@ class Config:
     notificacoes_segredo: str | None = None
     notificacoes_intervalo: float = 60.0
     notificacoes_preview: bool = False
+    tts_habilitado: bool = False
+    tts_voz: str = "pt-BR-FranciscaNeural"
+    tts_rate: str = "+0%"
+    tts_pitch: str = "+0Hz"
+    tts_volume: str = "+0%"
     cors_origins: tuple[str, ...] = ()
     cors_origin_regex: str | None = None
     emails_permitidos: tuple[str, ...] = ()
@@ -189,6 +194,10 @@ class Config:
         return bool(self.vapid_public_key and self.vapid_private_key)
 
     @property
+    def tts_ativa(self) -> bool:
+        return self.tts_habilitado
+
+    @property
     def agenda_ativa(self) -> bool:
         """Há como disparar lembretes (push configurado e banco admin)."""
         if not self.notificacoes_ativas:
@@ -284,6 +293,12 @@ class Config:
             notificacoes_preview=texto("NOTIFICACOES_PREVIEW", "false")
             .lower()
             in ("1", "true", "yes", "on"),
+            tts_habilitado=texto("TTS_HABILITADO", "false").lower()
+            in ("1", "true", "yes", "on"),
+            tts_voz=texto("TTS_VOZ", "pt-BR-FranciscaNeural"),
+            tts_rate=texto("TTS_RATE", "+0%"),
+            tts_pitch=texto("TTS_PITCH", "+0Hz"),
+            tts_volume=texto("TTS_VOLUME", "+0%"),
             cors_origins=tuple(
                 origem.strip()
                 for origem in texto("CORS_ORIGINS", "").split(",")

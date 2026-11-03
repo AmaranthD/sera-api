@@ -73,6 +73,16 @@ services:
         value: "60"
       - key: NOTIFICACOES_PREVIEW
         value: "false"
+      # Voz neural (Edge-TTS). O front só envia texto quando a pessoa ativa
+      # "Neural" e aceita o aviso de privacidade.
+      - key: TTS_HABILITADO
+        value: "true"
+      - key: TTS_VOZ
+        value: pt-BR-FranciscaNeural
+      - key: TTS_RATE
+        value: "+0%"
+      - key: TTS_PITCH
+        value: "+0Hz"
       # Necessária para o disparo agendado ler a agenda de todas as pessoas
       # (o caminho normal usa o JWT do usuário e o RLS).
       - key: SUPABASE_SERVICE_KEY

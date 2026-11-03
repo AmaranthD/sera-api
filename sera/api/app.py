@@ -20,6 +20,7 @@ from .jobs import GerenciadorJobs
 from .jw import ClienteJW
 from .llm import ClienteGemini, ClienteLLM, ClienteOpenAICompat
 from .rotas import router
+from .tts import router as router_tts
 from .webpush import validar_chaves
 
 logger = logging.getLogger(__name__)
@@ -152,6 +153,7 @@ def criar_app(
 
     app.include_router(router)
     app.include_router(router_agenda)
+    app.include_router(router_tts)
 
     @app.get("/health")
     async def health() -> dict:

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { Mensagem } from '../../dominios/tipos'
+import type { ApiSera } from '../../api/sera'
 import { formatarHora } from '../../dominios/texto'
 import { Icone } from '../../componentes/Icone'
 import { assinarFala, falar, falaSuportada, pararFala } from '../../voz/falar'
 import { useVoz } from '../../voz/contexto'
+import { falarResposta } from '../../voz/responder'
 import estilos from './Chat.module.css'
 import { ListaFontes } from './ListaFontes'
 import { MensagemMarkdown } from './MensagemMarkdown'
@@ -11,13 +13,14 @@ import { MensagemMarkdown } from './MensagemMarkdown'
 interface Props {
   mensagem: Mensagem
   transcrevendo: boolean
+  api?: ApiSera
 }
 
-export function MensagemItem({ mensagem, transcrevendo }: Props) {
+export function MensagemItem({ mensagem, transcrevendo, api }: Props) {
   const [falando, setFalando] = useState(false)
   const [revelar, setRevelar] = useState(false)
-  const { modo } = useVoz()
-  const podeFalar = falaSuportada()
+  const { modo, neural } = useVoz()
+  const podeFalar = (Boolean(api) && neural) || falaSuportada()
 
   useEffect(
     () =>
@@ -108,11 +111,22 @@ export function MensagemItem({ mensagem, transcrevendo }: Props) {
               className={`${estilos.botaoOuvir} ${
                 falando ? estilos.botaoOuvirAtivo : ''
               }`}
-              onClick={() =>
-                falando
-                  ? pararFala()
-                  : falar(mensagem.conteudo, { id: mensagem.id })
-              }
+              onClick={() => {
+                if (falando) {
+                  pararFala()
+                  return
+                }
+                if (api && neural) {
+                  void falarResposta(
+                    api,
+                    mensagem.conteudo,
+                    mensagem.id,
+                    neural,
+                  )
+                  return
+                }
+                falar(mensagem.conteudo, { id: mensagem.id })
+              }}
               aria-label={falando ? 'Parar leitura' : 'Ouvir resposta'}
               title={falando ? 'Parar leitura' : 'Ouvir resposta'}
             >

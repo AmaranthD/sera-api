@@ -1,5 +1,14 @@
 let vozes: SpeechSynthesisVoice[] = []
 let geracao = 0
+let audioAtual: HTMLAudioElement | null = null
+let urlAudio: string | null = null
+
+export class FalaCancelada extends Error {
+  constructor() {
+    super('fala cancelada')
+    this.name = 'FalaCancelada'
+  }
+}
 
 export interface EstadoFala {
   id: string | null
@@ -85,13 +94,13 @@ export function falar(
     return false
   }
 
+  pararFala()
   const atual = ++geracao
   const encerrar = () => {
     if (geracao === atual) avisar({ id: null, falando: false })
     opcoes.aoTerminar?.()
   }
 
-  motor.cancel()
   const fala = new SpeechSynthesisUtterance(limpo)
   const voz = vozPtBr()
   if (voz) {
@@ -109,8 +118,59 @@ export function falar(
   return true
 }
 
+export async function falarNeural(
+  obterAudio: () => Promise<Blob>,
+  opcoes: { id?: string; aoTerminar?: () => void } = {},
+): Promise<boolean> {
+  pararFala()
+  const atual = ++geracao
+
+  let blob: Blob
+  try {
+    blob = await obterAudio()
+  } catch {
+    return false
+  }
+  if (geracao !== atual) throw new FalaCancelada()
+
+  const url = URL.createObjectURL(blob)
+  const audio = new Audio(url)
+  audioAtual = audio
+  urlAudio = url
+
+  const encerrar = () => {
+    if (urlAudio === url) {
+      URL.revokeObjectURL(url)
+      urlAudio = null
+    }
+    if (audioAtual === audio) audioAtual = null
+    if (geracao === atual) avisar({ id: null, falando: false })
+    opcoes.aoTerminar?.()
+  }
+
+  audio.onended = encerrar
+  audio.onerror = encerrar
+  try {
+    await audio.play()
+  } catch {
+    encerrar()
+    return false
+  }
+  avisar({ id: opcoes.id ?? null, falando: true })
+  return true
+}
+
 export function pararFala(): void {
   geracao += 1
   sintese()?.cancel()
+  if (audioAtual) {
+    audioAtual.pause()
+    audioAtual.src = ''
+    audioAtual = null
+  }
+  if (urlAudio) {
+    URL.revokeObjectURL(urlAudio)
+    urlAudio = null
+  }
   avisar({ id: null, falando: false })
 }

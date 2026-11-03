@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { aquecerApi } from '../../api/aquecimento'
+import { ehSessaoExpirada, mensagemDoErro } from '../../api/erros'
 import { useSessao } from '../../auth/contexto'
 import { useChat } from '../../chat/contexto'
 import { usePessoa } from '../../pessoa/contexto'
@@ -31,11 +32,12 @@ export function ChatTela() {
     limparErro,
   } = useChat()
   const { pessoa } = usePessoa()
-  const { api } = useSessao()
+  const { api, sair } = useSessao()
   const online = useOnline()
 
-  const { modo: modoVoz, alternar: alternarVoz } = useVoz()
+  const { modo: modoVoz, neural, alternar: alternarVoz, definirNeural } = useVoz()
   const [drawerAberto, setDrawerAberto] = useState(false)
+  const [erroVozNeural, setErroVozNeural] = useState<string | null>(null)
   const [rascunho, setRascunho] = useState('')
   const [modoJw, setModoJw] = useState(false)
 
@@ -52,19 +54,48 @@ export function ChatTela() {
     modoVoz === 'so-audio'
       ? 'Só áudio'
       : modoVoz === 'voz'
-        ? 'Voz on'
-        : 'Voz'
+        ? 'Ouvindo'
+        : 'Ouvir'
   const tituloVoz =
     modoVoz === 'so-audio'
       ? 'Só áudio: as respostas são lidas e o texto fica oculto'
       : modoVoz === 'voz'
         ? 'Lendo as respostas em voz alta'
-        : 'Voz desligada'
+        : 'Ouvir as respostas'
   const titulo = conversaAtual
     ? tituloDaConversa(conversaAtual)
     : conversaId
       ? 'Conversa'
       : 'Nova conversa'
+
+  async function alternarNeural() {
+    if (neural) {
+      definirNeural(false)
+      return
+    }
+    const aceito = window.confirm(
+      'A voz neural tem qualidade melhor, mas envia o texto das respostas ' +
+        'para o serviço de voz da Microsoft. Ativar?',
+    )
+    if (!aceito) return
+    try {
+      const info = await api.ttsInfo()
+      if (!info.disponivel) {
+        setErroVozNeural(
+          'A voz neural não está disponível neste servidor.',
+        )
+        return
+      }
+      setErroVozNeural(null)
+      definirNeural(true)
+    } catch (falha) {
+      if (ehSessaoExpirada(falha)) {
+        await sair()
+        return
+      }
+      setErroVozNeural(mensagemDoErro(falha))
+    }
+  }
 
   const enviarTexto = (texto: string) => {
     if (!online || ocupado) return
@@ -134,6 +165,28 @@ export function ChatTela() {
             <span className={estilos.rotuloVoz}>{rotuloVoz}</span>
           </button>
 
+          <button
+            type="button"
+            className={`${estilos.botaoVoz} ${
+              neural ? estilos.botaoVozAtivo : ''
+            }`}
+            aria-pressed={neural}
+            aria-label={
+              neural
+                ? 'Voz neural ativa. Toque para usar a voz do aparelho.'
+                : 'Usar voz neural (envia o texto para o serviço de voz)'
+            }
+            title={
+              neural
+                ? 'Voz neural ativa'
+                : 'Voz neural: melhor qualidade, envia o texto para o serviço de voz'
+            }
+            onClick={() => void alternarNeural()}
+          >
+            <Icone nome="brilho" tamanho={17} />
+            <span className={estilos.rotuloVoz}>Neural</span>
+          </button>
+
           <Link
             to="/agenda"
             className={estilos.botaoIcone}
@@ -170,6 +223,20 @@ export function ChatTela() {
           <div className={estilos.avisoConexao}>
             <Banner tipo="erro" acao={acaoDoErro}>
               {erro}
+            </Banner>
+          </div>
+        ) : null}
+
+        {erroVozNeural ? (
+          <div className={estilos.avisoConexao}>
+            <Banner
+              tipo="aviso"
+              acao={{
+                rotulo: 'Fechar',
+                aoClicar: () => setErroVozNeural(null),
+              }}
+            >
+              {erroVozNeural}
             </Banner>
           </div>
         ) : null}

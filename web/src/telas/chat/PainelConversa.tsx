@@ -4,8 +4,9 @@ import { usePessoa } from '../../pessoa/contexto'
 import { primeiroNome, tituloDaConversa } from '../../dominios/texto'
 import { Marca } from '../../componentes/Marca'
 import { Icone } from '../../componentes/Icone'
-import { falar } from '../../voz/falar'
 import { useVoz } from '../../voz/contexto'
+import { falarResposta } from '../../voz/responder'
+import { useSessao } from '../../auth/contexto'
 import { MensagemItem } from './MensagemItem'
 import estilos from './Chat.module.css'
 
@@ -19,7 +20,8 @@ export function PainelConversa({ aoSugerir }: { aoSugerir: (texto: string) => vo
   const { pessoa } = usePessoa()
   const { mensagens, status, carregandoMensagens, conversaId, conversaAtual } =
     useChat()
-  const { modo: modoVoz } = useVoz()
+  const { modo: modoVoz, neural } = useVoz()
+  const { api } = useSessao()
 
   const rolagemRef = useRef<HTMLDivElement>(null)
   const fimRef = useRef<HTMLDivElement>(null)
@@ -64,12 +66,12 @@ export function PainelConversa({ aoSugerir }: { aoSugerir: (texto: string) => vo
       if (ultima) {
         setAnuncio(`Resposta da Sera: ${ultima.conteudo.slice(0, 500)}`)
         if (modoVoz !== 'desligado') {
-          falar(ultima.conteudo, { id: ultima.id })
+          void falarResposta(api, ultima.conteudo, ultima.id, neural)
         }
       }
     }
     statusAnterior.current = status
-  }, [status, mensagens, modoVoz])
+  }, [status, mensagens, modoVoz, neural, api])
 
   if (carregandoMensagens) {
     return (
@@ -141,6 +143,7 @@ export function PainelConversa({ aoSugerir }: { aoSugerir: (texto: string) => vo
             transcrevendo={
               transcrevendo && mensagem === mensagens[mensagens.length - 1]
             }
+            api={api}
           />
         ))}
         {!conversaId && mensagens.length === 0 ? (

@@ -36,9 +36,11 @@ export function Composer({
   const referencia = useRef<HTMLTextAreaElement>(null)
   const [ouvindo, setOuvindo] = useState(false)
   const [erroVoz, setErroVoz] = useState<string | null>(null)
+  const [avisoDitado, setAvisoDitado] = useState<string | null>(null)
   const ouvinteRef = useRef<Ouvinte | null>(null)
   const baseRef = useRef('')
   const finalRef = useRef('')
+  const teveTextoRef = useRef(false)
   const suportaVoz = reconhecimentoSuportado()
 
   useEffect(() => {
@@ -65,10 +67,13 @@ export function Composer({
     if (!confirmarUsoDaVoz()) return
 
     setErroVoz(null)
+    setAvisoDitado(null)
     baseRef.current = valor.trim()
     finalRef.current = ''
+    teveTextoRef.current = false
     const ouvinte = ouvir({
       aoTexto: (texto, final) => {
+        teveTextoRef.current = true
         if (final) finalRef.current = `${finalRef.current} ${texto}`.trim()
         const partes = [baseRef.current, finalRef.current]
         if (!final) partes.push(texto)
@@ -82,6 +87,11 @@ export function Composer({
       aoFim: () => {
         ouvinteRef.current = null
         setOuvindo(false)
+        setAvisoDitado(
+          teveTextoRef.current
+            ? 'Ditado pronto — revise e toque em enviar.'
+            : 'Não ouvi nada. Tente de novo.',
+        )
       },
     })
     if (!ouvinte) {
@@ -130,7 +140,10 @@ export function Composer({
           }
           value={valor}
           disabled={!online || ocupado}
-          onChange={(evento) => aoMudar(evento.target.value)}
+          onChange={(evento) => {
+            if (!ouvindo) setAvisoDitado(null)
+            aoMudar(evento.target.value)
+          }}
           onKeyDown={(evento) => {
             if (
               evento.key === 'Enter' &&
@@ -201,6 +214,7 @@ export function Composer({
       <div className={estilos.composerRodape}>
         <span role={erroVoz ? 'status' : undefined}>
           {erroVoz ??
+            avisoDitado ??
             (!online
               ? 'Sem conexão para enviar.'
               : modoJw

@@ -123,6 +123,17 @@ export class ApiSera {
     return this.http.json<{ status: string }>('/health')
   }
 
+  ttsInfo(): Promise<{ disponivel: boolean; voz: string }> {
+    return this.http.json<{ disponivel: boolean; voz: string }>('/tts')
+  }
+
+  gerarAudio(texto: string): Promise<Blob> {
+    return this.http.blob('/tts', {
+      metodo: 'POST',
+      corpo: { texto },
+    })
+  }
+
   transmitirChat(
     entrada: EntradaChat,
     aoEvento: (evento: EventoChat) => void,
