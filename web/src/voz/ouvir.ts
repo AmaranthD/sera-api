@@ -81,15 +81,20 @@ export function ouvir(opcoes: OpcoesOuvir): Ouvinte | null {
 
   const reconhecedor = new Ctor()
   reconhecedor.lang = 'pt-BR'
-  // Uma frase por vez é bem mais compatível que contínuo no iOS/Android.
-  reconhecedor.continuous = false
+  // Contínuo mantém o microfone aberto enquanto a pessoa fala. Alguns
+  // navegadores encerram sozinhos depois da primeira frase, o que é tratado
+  // no onend.
+  reconhecedor.continuous = true
   reconhecedor.interimResults = true
   reconhecedor.maxAlternatives = 1
 
   let ativo = true
   let iniciado = false
+  let recebeuTexto = false
+  let erroRecebido = false
   const limite = window.setTimeout(() => {
     if (iniciado) return
+    erroRecebido = true
     opcoes.aoErro?.('timeout')
     try {
       reconhecedor.abort()
@@ -102,6 +107,7 @@ export function ouvir(opcoes: OpcoesOuvir): Ouvinte | null {
     window.clearTimeout(limite)
     if (!ativo) return
     ativo = false
+    if (!recebeuTexto && !erroRecebido) opcoes.aoErro?.('no-speech')
     opcoes.aoFim?.()
   }
 
@@ -112,6 +118,7 @@ export function ouvir(opcoes: OpcoesOuvir): Ouvinte | null {
   }
 
   reconhecedor.onresult = (evento) => {
+    recebeuTexto = true
     let final = ''
     let parcial = ''
     for (let indice = evento.resultIndex; indice < evento.results.length; indice += 1) {
@@ -127,9 +134,9 @@ export function ouvir(opcoes: OpcoesOuvir): Ouvinte | null {
 
   reconhecedor.onerror = (evento) => {
     window.clearTimeout(limite)
-    if (evento.error !== 'aborted' && evento.error !== 'no-speech') {
-      opcoes.aoErro?.(evento.error)
-    }
+    if (evento.error === 'aborted') return
+    erroRecebido = true
+    opcoes.aoErro?.(evento.error)
   }
 
   reconhecedor.onend = encerrar
