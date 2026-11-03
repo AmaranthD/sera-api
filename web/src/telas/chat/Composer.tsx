@@ -145,6 +145,25 @@ export function Composer({
   return (
     <div className={estilos.composerArea}>
       {aviso}
+      {erroVoz ? (
+        <div className={estilos.erroVoz} role="alert">
+          <span>{erroVoz}</span>
+          <button
+            type="button"
+            className={estilos.fecharErroVoz}
+            aria-label="Fechar aviso de voz"
+            onClick={() => setErroVoz(null)}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+      {!suportaVoz ? (
+        <p className={estilos.vozIndisponivel}>
+          Ditado não disponível neste navegador. No iPhone, use o microfone do
+          teclado; no Android, use Chrome atualizado.
+        </p>
+      ) : null}
       {pedirConsentimento ? (
         <div
           className={estilos.consentimentoVoz}
@@ -273,8 +292,7 @@ export function Composer({
       </form>
       <div className={estilos.composerRodape}>
         <span role={erroVoz ? 'status' : undefined}>
-          {erroVoz ??
-            avisoDitado ??
+          {avisoDitado ??
             (!online
               ? 'Sem conexão para enviar.'
               : modoJw

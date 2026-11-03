@@ -37,8 +37,11 @@ self.addEventListener('push', (evento) => {
           includeUncontrolled: true,
         })
         const alvo = dados.url || ''
+        // `focused` evita suprimir a notificação só porque o app está
+        // montado em segundo plano no celular.
         const vendo = janelas.some(
           (janela) =>
+            janela.focused === true &&
             janela.visibilityState === 'visible' &&
             (!alvo || janela.url.includes(alvo)),
         )
