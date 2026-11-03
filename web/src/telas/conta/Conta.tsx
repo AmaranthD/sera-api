@@ -22,6 +22,7 @@ import { Icone } from '../../componentes/Icone'
 import { Marca } from '../../componentes/Marca'
 import { SecaoAjustes } from './Ajustes'
 import { SecaoMemorias } from './Memorias'
+import { SecaoMicrofone } from './Microfone'
 import estilos from './Conta.module.css'
 
 type Saude = 'verificando' | 'ok' | 'falha'
@@ -214,6 +215,8 @@ export function Conta() {
           aoApagar={apagarAjuste}
           aoTentarDeNovo={() => void carregarDados()}
         />
+
+        <SecaoMicrofone />
 
         <section className={estilos.secao} aria-labelledby="dados-titulo">
           <h2 className={estilos.secaoTitulo} id="dados-titulo">

@@ -90,6 +90,8 @@ navegador.
   revisa antes de enviar.
 - O reconhecimento pode enviar o áudio para o serviço do navegador; por isso
   o app pede consentimento uma vez e não grava nem guarda áudio.
+- **Conta → Microfone e voz** permite liberar o microfone explicitamente e
+  testar o ditado, mostrando o texto reconhecido.
 - Onde a API não existe (Firefox, por exemplo), os botões somem e o chat
   continua normal.
 - **Voz neural (opcional)**: o botão `Neural` usa o endpoint `/tts`
