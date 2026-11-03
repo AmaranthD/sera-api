@@ -36,6 +36,7 @@ export function Composer({
 }: Props) {
   const referencia = useRef<HTMLTextAreaElement>(null)
   const [ouvindo, setOuvindo] = useState(false)
+  const [iniciado, setIniciado] = useState(false)
   const [erroVoz, setErroVoz] = useState<string | null>(null)
   const [avisoDitado, setAvisoDitado] = useState<string | null>(null)
   const [pedirConsentimento, setPedirConsentimento] = useState(false)
@@ -58,6 +59,7 @@ export function Composer({
     ouvinteRef.current?.parar()
     ouvinteRef.current = null
     setOuvindo(false)
+    setIniciado(false)
   }
 
   const iniciarDitado = () => {
@@ -71,8 +73,10 @@ export function Composer({
     baseRef.current = valor.trim()
     finalRef.current = ''
     teveTextoRef.current = false
+    setIniciado(false)
     setOuvindo(true)
     const ouvinte = ouvir({
+      aoIniciar: () => setIniciado(true),
       aoTexto: (texto, final) => {
         teveTextoRef.current = true
         if (final) finalRef.current = `${finalRef.current} ${texto}`.trim()
@@ -84,10 +88,12 @@ export function Composer({
         setErroVoz(mensagemDeErroVoz(erro))
         ouvinteRef.current = null
         setOuvindo(false)
+        setIniciado(false)
       },
       aoFim: () => {
         ouvinteRef.current = null
         setOuvindo(false)
+        setIniciado(false)
         setAvisoDitado(
           teveTextoRef.current
             ? 'Ditado pronto — revise e toque em enviar.'
@@ -205,7 +211,9 @@ export function Composer({
           maxLength={LIMITE_MENSAGEM}
           placeholder={
             ouvindo
-              ? 'Ouvindo… fale agora'
+              ? iniciado
+                ? 'Ouvindo… fale agora'
+                : 'Aguardando o microfone…'
               : !online
                 ? 'Sem conexão. Sua mensagem fica aqui.'
                 : modoJw
@@ -288,7 +296,9 @@ export function Composer({
       </form>
       <div className={estilos.composerRodape}>
         <span role={erroVoz ? 'status' : undefined}>
-          {avisoDitado ??
+          {(ouvindo && !iniciado
+            ? 'Aguardando o microfone e a permissão…'
+            : avisoDitado) ??
             (!online
               ? 'Sem conexão para enviar.'
               : modoJw

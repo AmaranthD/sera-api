@@ -20,10 +20,14 @@ export function SecaoMicrofone() {
   const [estado, setEstado] = useState<EstadoPermissao>('desconhecido')
   const [pedindo, setPedindo] = useState(false)
   const [testando, setTestando] = useState(false)
+  const [iniciado, setIniciado] = useState(false)
   const [transcricao, setTranscricao] = useState('')
   const [erro, setErro] = useState<string | null>(null)
+  const [aviso, setAviso] = useState<string | null>(null)
   const ouvinteRef = useRef<Ouvinte | null>(null)
   const suporta = reconhecimentoSuportado()
+  const temMicrofone =
+    typeof navigator !== 'undefined' && 'mediaDevices' in navigator
 
   useEffect(() => {
     let ativo = true
@@ -39,6 +43,7 @@ export function SecaoMicrofone() {
   const permitir = async () => {
     setPedindo(true)
     setErro(null)
+    setAviso(null)
     const resultado = await pedirPermissaoMicrofone()
     setPedindo(false)
     if (!resultado.ok) {
@@ -47,6 +52,7 @@ export function SecaoMicrofone() {
       return
     }
     setEstado('granted')
+    setAviso('Microfone liberado. Agora use “Testar ditado” ou o microfone do chat.')
   }
 
   const testar = () => {
@@ -57,16 +63,21 @@ export function SecaoMicrofone() {
       return
     }
     setErro(null)
+    setAviso(null)
     setTranscricao('')
+    setIniciado(false)
     setTestando(true)
     const ouvinte = ouvir({
+      aoIniciar: () => setIniciado(true),
       aoTexto: (texto) => setTranscricao(texto),
       aoErro: (falha) => {
         setErro(mensagemDeErroVoz(falha))
+        setIniciado(false)
         setTestando(false)
       },
       aoFim: () => {
         ouvinteRef.current = null
+        setIniciado(false)
         setTestando(false)
       },
     })
@@ -113,7 +124,22 @@ export function SecaoMicrofone() {
         </p>
       ) : null}
 
+      <p className={estilos.secaoTexto}>
+        Neste navegador: ditado {suporta ? 'sim' : 'não'} · microfone{' '}
+        {temMicrofone ? 'sim' : 'não'} · conexão segura{' '}
+        {window.isSecureContext ? 'sim' : 'não'}
+      </p>
+
+      {testando ? (
+        <p className={estilos.secaoTexto} role="status">
+          {iniciado
+            ? 'Ouvindo… fale agora. Toque em “Parar teste” quando terminar.'
+            : 'Aguardando o microfone e a permissão do navegador…'}
+        </p>
+      ) : null}
+
       {erro ? <p className={estilos.secaoTexto}>{erro}</p> : null}
+      {aviso ? <p className={estilos.secaoTexto}>{aviso}</p> : null}
       {transcricao ? (
         <p className={estilos.secaoTexto}>
           <strong>Ouvi:</strong> {transcricao}

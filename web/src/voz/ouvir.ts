@@ -79,7 +79,12 @@ export function ouvir(opcoes: OpcoesOuvir): Ouvinte | null {
   const Ctor = construtor()
   if (!Ctor) return null
 
-  const reconhecedor = new Ctor()
+  let reconhecedor: Reconhecedor
+  try {
+    reconhecedor = new Ctor()
+  } catch {
+    return null
+  }
   reconhecedor.lang = 'pt-BR'
   // Contínuo mantém o microfone aberto enquanto a pessoa fala. Alguns
   // navegadores encerram sozinhos depois da primeira frase, o que é tratado
@@ -101,7 +106,7 @@ export function ouvir(opcoes: OpcoesOuvir): Ouvinte | null {
     } catch {
       // Ignora: o navegador pode já ter encerrado.
     }
-  }, 5000)
+  }, 20000)
 
   const encerrar = () => {
     window.clearTimeout(limite)
