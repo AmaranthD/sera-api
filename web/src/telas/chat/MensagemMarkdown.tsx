@@ -40,7 +40,9 @@ export function MensagemMarkdown({ texto }: { texto: string }) {
               className={estilos.linkJw}
               onClick={(evento) => {
                 evento.preventDefault()
-                abrirJanela(href)
+                const texto =
+                  evento.currentTarget.textContent?.trim().slice(0, 120) ?? ''
+                abrirJanela(href, texto)
               }}
             >
               {children}

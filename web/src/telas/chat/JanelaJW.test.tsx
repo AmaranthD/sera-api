@@ -31,7 +31,7 @@ describe('JanelaJW', () => {
 
     await usuario.click(link)
 
-    expect(api.conteudoJW).toHaveBeenCalledWith(URL_VERSE)
+    expect(api.conteudoJW).toHaveBeenCalledWith(URL_VERSE, 'Atos 20:35')
     expect(await screen.findByText('Atos 20')).toBeInTheDocument()
     expect(await screen.findByText('Texto do capítulo.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Abrir no JW.org' })).toHaveAttribute(

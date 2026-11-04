@@ -8,6 +8,7 @@ import pytest
 from sera.api import agenda, texto_diario
 from sera.api.config import Config
 from sera.api.ferramentas import ContextoFerramentas, executar_ferramenta
+from sera.api.jw_conteudo import extrair_biblia, parse_referencia_biblica
 from sera.api.texto_diario import (
     extrair_texto_do_dia,
     formatar_texto_do_dia,
@@ -48,6 +49,43 @@ def test_extrai_titulo_tema_corpo_e_links():
     assert mensagem.startswith("## Texto diário — Quarta-feira, 4 de novembro")
     assert f"[Ver no JW.org]({URL}#externo)" in mensagem
     assert "(https://wol.jw.org/pt/wol/bc/" in mensagem
+
+
+def test_referencia_biblica_portuguesa():
+    assert parse_referencia_biblica("Atos 20:35") == (44, 20, 35, None)
+    assert parse_referencia_biblica("Fil. 1:1") == (50, 1, 1, None)
+    assert parse_referencia_biblica("Sal 41:1-3") == (19, 41, 1, 3)
+    assert parse_referencia_biblica("19:17") == (None, 19, 17, None)
+    assert parse_referencia_biblica("Jó 1:1") == (18, 1, 1, None)
+    assert parse_referencia_biblica("Jo 3:16") == (43, 3, 16, None)
+
+
+def test_extrai_so_o_versiculo_da_pagina_biblica():
+    html = """
+    <html><head><title>Atos 20 — BIBLIOTECA ON-LINE da Torre de Vigia</title></head>
+    <body><article id="article">
+      <h1>Atos dos Apóstolos</h1>
+      <p>
+        <span id="v44-20-34-1" class="v"><a class="vl">34 </a>Então ele subiu.</span>
+        <span id="v44-20-35-1" class="v"><a class="vl">35 </a>Há mais felicidade
+          em dar do que em receber.<a class="b">+</a></span>
+        <span id="v44-20-36-1" class="v"><a class="vl">36 </a>Depois orou.</span>
+      </p>
+      <div class="studyNoteGroup"><p>Nota de estudo que não deve aparecer.</p></div>
+    </article></body></html>
+    """
+
+    conteudo = extrair_biblia(
+        html,
+        "https://wol.jw.org/pt/wol/bc/r5/lp-t/1102026210/13/0",
+        "Atos 20:35",
+    )
+
+    assert conteudo.titulo == "Atos 20:35"
+    assert len(conteudo.paragrafos) == 1
+    assert "felicidade" in conteudo.paragrafos[0]
+    assert "Então ele subiu" not in conteudo.paragrafos[0]
+    assert "Nota de estudo" not in " ".join(conteudo.paragrafos)
 
 
 async def test_busca_texto_do_dia_na_url_certa():
@@ -208,7 +246,7 @@ async def test_modal_recusa_link_fora_do_jw(cliente, monkeypatch):
     from sera.api import rotas
     from sera.api.jw_conteudo import ConteudoJW
 
-    async def falso_buscar(url):
+    async def falso_buscar(url, referencia=None):
         return ConteudoJW(
             titulo="Atos 20",
             paragrafos=("texto",),

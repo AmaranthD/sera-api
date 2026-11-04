@@ -259,8 +259,10 @@ export class ApiSera {
     )
   }
 
-  conteudoJW(url: string): Promise<ConteudoJW> {
-    return this.http.json<ConteudoJW>(`/jw/conteudo?url=${encodeURIComponent(url)}`, {
+  conteudoJW(url: string, referencia?: string): Promise<ConteudoJW> {
+    const parametros = new URLSearchParams({ url })
+    if (referencia) parametros.set('referencia', referencia)
+    return this.http.json<ConteudoJW>(`/jw/conteudo?${parametros.toString()}`, {
       tempoLimiteMs: 25_000,
     })
   }

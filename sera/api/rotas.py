@@ -204,11 +204,12 @@ async def _conversa_do_chat(
 async def conteudo_jw(
     usuario: DependenciaUsuario,
     url: str = Query(..., min_length=8, max_length=2000),
+    referencia: str | None = Query(None, max_length=120),
 ):
     """Conteúdo legível de uma página do jw.org para o modal do chat."""
     del usuario
     try:
-        conteudo = await buscar_conteudo_jw(url)
+        conteudo = await buscar_conteudo_jw(url, referencia=referencia)
     except URLJWInvalida as erro:
         raise HTTPException(status_code=422, detail=str(erro)) from erro
     except ConteudoJWIndisponivel as erro:

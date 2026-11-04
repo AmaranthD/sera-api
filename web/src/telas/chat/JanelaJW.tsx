@@ -11,15 +11,23 @@ interface ProviderProps {
 }
 
 export function JanelaJWProvider({ api, children }: ProviderProps) {
-  const [url, setUrl] = useState<string | null>(null)
-  const abrir = useCallback((destino: string) => {
-    if (destino) setUrl(destino)
+  const [janela, setJanela] = useState<{
+    url: string
+    referencia?: string
+  } | null>(null)
+  const abrir = useCallback((destino: string, texto?: string) => {
+    if (destino) setJanela({ url: destino, referencia: texto })
   }, [])
 
   return (
     <JanelaJWContext.Provider value={abrir}>
       {children}
-      <ConteudoJWModal api={api} url={url} aoFechar={() => setUrl(null)} />
+      <ConteudoJWModal
+        api={api}
+        url={janela?.url ?? null}
+        referencia={janela?.referencia}
+        aoFechar={() => setJanela(null)}
+      />
     </JanelaJWContext.Provider>
   )
 }
@@ -27,18 +35,19 @@ export function JanelaJWProvider({ api, children }: ProviderProps) {
 interface ModalProps {
   api: ApiSera
   url: string | null
+  referencia?: string
   aoFechar: () => void
 }
 
-function ConteudoJWModal({ api, url, aoFechar }: ModalProps) {
-  const referencia = useRef<HTMLDialogElement>(null)
+function ConteudoJWModal({ api, url, referencia, aoFechar }: ModalProps) {
+  const dialogoRef = useRef<HTMLDialogElement>(null)
   const tituloId = useId()
   const [conteudo, setConteudo] = useState<ConteudoJW | null>(null)
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
-    const dialogo = referencia.current
+    const dialogo = dialogoRef.current
     if (!url || !dialogo) return
     if (!dialogo.open) dialogo.showModal()
     return () => {
@@ -53,7 +62,7 @@ function ConteudoJWModal({ api, url, aoFechar }: ModalProps) {
     setErro(null)
     setConteudo(null)
     api
-      .conteudoJW(url)
+      .conteudoJW(url, referencia)
       .then((resposta) => {
         if (ativo) setConteudo(resposta)
       })
@@ -66,13 +75,13 @@ function ConteudoJWModal({ api, url, aoFechar }: ModalProps) {
     return () => {
       ativo = false
     }
-  }, [api, url])
+  }, [api, url, referencia])
 
   if (!url) return null
 
   return (
     <dialog
-      ref={referencia}
+      ref={dialogoRef}
       className={estilos.dialogo}
       aria-labelledby={tituloId}
       onCancel={(evento) => {
@@ -81,7 +90,7 @@ function ConteudoJWModal({ api, url, aoFechar }: ModalProps) {
       }}
       onClose={aoFechar}
       onClick={(evento) => {
-        if (evento.target === referencia.current) aoFechar()
+        if (evento.target === dialogoRef.current) aoFechar()
       }}
     >
       <article className={estilos.cartao}>

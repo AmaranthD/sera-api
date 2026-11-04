@@ -26,6 +26,11 @@ com o conteúdo legível buscado por `GET /jw/conteudo?url=...`. O WOL não
 pode ser embutido em iframe (`X-Frame-Options: SAMEORIGIN`), por isso o
 modal mostra o texto extraído e oferece “Abrir no JW.org”.
 
+Para links bíblicos (`/wol/bc/`), o texto do link (`Atos 20:35`, `Fil. 1:1`)
+vai como `referencia` e o modal mostra **só o versículo citado**, sem as
+notas de estudo nem as referências cruzadas. Sem referência, mostra o
+capítulo inteiro (também só o texto bíblico).
+
 ## Assinatura
 
 No Supabase, aplique `supabase/migrations/20261104000000_texto_diario.sql`.
