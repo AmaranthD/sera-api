@@ -207,6 +207,17 @@ class Config:
         return True
 
     @property
+    def texto_diario_ativa(self) -> bool:
+        """O cron do texto diário precisa do banco administrativo.
+
+        Diferente dos lembretes, não exige VAPID: a entrega na conversa
+        funciona mesmo sem notificações; o push é só um extra.
+        """
+        if self.supabase_url and not self.supabase_service_key:
+            return False
+        return True
+
+    @property
     def url_chat(self) -> str:
         base = self._base_limpa()
         if base.endswith("/chat/completions"):

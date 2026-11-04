@@ -17,6 +17,7 @@ NOME_JW = "jw"
 NOME_AGENDAR = "agendar"
 NOME_CONSULTAR_AGENDA = "consultar_agenda"
 NOME_CANCELAR_COMPROMISSO = "cancelar_compromisso"
+NOME_TEXTO_DIARIO = "texto_diario"
 
 _MAX_AJUSTES = 20
 _MAX_MEMORIAS = 100

@@ -20,9 +20,15 @@ from .schemas import (
     CompromissoAtualizacao,
     CompromissoEntrada,
     InscricaoPushEntrada,
+    TextoDiarioEntrada,
 )
 from .tempo import com_fuso as _com_fuso
 from .tempo import iso_utc as _utc
+from .texto_diario import (
+    TextoDiarioIndisponivel,
+    disparar_textos_diarios,
+    entregar_texto_do_dia,
+)
 from .webpush import (
     FalhaPush,
     NotificacoesIndisponiveis,
@@ -318,6 +324,76 @@ async def testar_notificacao(
     return {"enviados": enviados, "dispositivos": len(inscricoes)}
 
 
+def _fuso_texto_diario(valor: str | None, config: Config) -> str:
+    nome = valor or config.fuso_horario
+    try:
+        ZoneInfo(nome)
+    except (ValueError, ZoneInfoNotFoundError) as erro:
+        raise HTTPException(
+            status_code=422, detail=f"fuso horário inválido: {nome}"
+        ) from erro
+    return nome
+
+
+@router.get("/pessoas/{pessoa_id}/texto-diario")
+async def obter_texto_diario(
+    pessoa_id: str,
+    banco: DependenciaBanco,
+    config: DependenciaConfig,
+    usuario: DependenciaUsuario,
+):
+    pessoa = _pessoa_do_usuario(usuario, pessoa_id)
+    assinatura = await banco.obter_assinatura_texto_diario(pessoa)
+    if assinatura is None:
+        return {
+            "ativo": False,
+            "hora": "07:00",
+            "fuso": config.fuso_horario,
+            "conversa_id": None,
+            "ultimo_envio_dia": None,
+        }
+    return assinatura
+
+
+@router.put("/pessoas/{pessoa_id}/texto-diario")
+async def salvar_texto_diario(
+    pessoa_id: str,
+    corpo: TextoDiarioEntrada,
+    banco: DependenciaBanco,
+    config: DependenciaConfig,
+    usuario: DependenciaUsuario,
+):
+    pessoa = _pessoa_do_usuario(usuario, pessoa_id)
+    fuso = _fuso_texto_diario(corpo.fuso, config)
+    return await banco.salvar_assinatura_texto_diario(
+        pessoa, corpo.ativo, corpo.hora, fuso
+    )
+
+
+@router.post(
+    "/pessoas/{pessoa_id}/texto-diario/enviar", status_code=202
+)
+async def enviar_texto_diario_agora(
+    pessoa_id: str,
+    banco: DependenciaBanco,
+    config: DependenciaConfig,
+    usuario: DependenciaUsuario,
+):
+    """Entrega o texto de hoje na hora, para testar a configuração."""
+    pessoa = _pessoa_do_usuario(usuario, pessoa_id)
+    assinatura = await banco.obter_assinatura_texto_diario(pessoa) or {}
+    try:
+        return await entregar_texto_do_dia(
+            banco,
+            config,
+            pessoa,
+            conversa_id=assinatura.get("conversa_id"),
+            fuso=assinatura.get("fuso") or config.fuso_horario,
+        )
+    except TextoDiarioIndisponivel as erro:
+        raise HTTPException(status_code=503, detail=str(erro)) from erro
+
+
 async def disparar_lembretes(
     banco, config: Config, momento: datetime | None = None
 ) -> dict:
@@ -376,15 +452,22 @@ async def disparar(
         raise HTTPException(
             status_code=503, detail="banco de notificações indisponível"
         )
-    if not config.notificacoes_ativas:
+    if not config.notificacoes_ativas and not config.texto_diario_ativa:
         raise HTTPException(
             status_code=503, detail="notificações não configuradas"
         )
-    return await disparar_lembretes(banco, config)
+    resultado: dict = {}
+    if config.agenda_ativa:
+        resultado.update(await disparar_lembretes(banco, config))
+    if config.texto_diario_ativa:
+        resultado["texto_diario"] = await disparar_textos_diarios(
+            banco, config
+        )
+    return resultado
 
 
 async def laco_lembretes(app: FastAPI, config: Config) -> None:
-    """Dispara lembretes periodicamente enquanto a API estiver acordada.
+    """Dispara lembretes e o texto diário enquanto a API estiver acordada.
 
     O cron externo (`/notificacoes/disparar`) cobre o caso do Render dormir.
     """
@@ -392,9 +475,12 @@ async def laco_lembretes(app: FastAPI, config: Config) -> None:
         try:
             banco = getattr(app.state, "banco_admin", None)
             if banco is not None:
-                await disparar_lembretes(banco, config)
+                if config.agenda_ativa:
+                    await disparar_lembretes(banco, config)
+                if config.texto_diario_ativa:
+                    await disparar_textos_diarios(banco, config)
         except asyncio.CancelledError:
             raise
         except Exception:
-            logger.exception("falha ao disparar lembretes")
+            logger.exception("falha ao disparar avisos")
         await asyncio.sleep(config.notificacoes_intervalo)

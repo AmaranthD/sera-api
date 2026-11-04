@@ -164,3 +164,31 @@ export interface EntradaInscricaoPush {
   keys: { p256dh: string; auth: string }
   user_agent?: string
 }
+
+export interface AssinaturaTextoDiario {
+  ativo: boolean
+  hora: string
+  fuso: string
+  conversa_id: string | null
+  ultimo_envio_dia: string | null
+}
+
+export interface EntradaTextoDiario {
+  ativo: boolean
+  hora: string
+  fuso?: string
+}
+
+export interface EntregaTextoDiario {
+  conversa_id: string
+  mensagem_id: string
+  dia: string
+  enviados: number
+  falhas: number
+}
+
+export interface ConteudoJW {
+  titulo: string
+  paragrafos: string[]
+  url: string
+}

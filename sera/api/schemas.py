@@ -83,6 +83,19 @@ DescricaoCompromisso = Annotated[
 FusoHorario = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)
 ]
+HoraTextoDiario = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        pattern=r"^([01]\d|2[0-3]):[0-5]\d$",
+    ),
+]
+
+
+class TextoDiarioEntrada(BaseModel):
+    ativo: bool = True
+    hora: HoraTextoDiario = "07:00"
+    fuso: FusoHorario | None = None
 
 
 def _validar_intervalo(inicio: datetime, fim: datetime) -> None:

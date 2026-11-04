@@ -12,7 +12,7 @@ from anyio import to_thread
 
 from .. import rag
 
-VERSAO_SCHEMA = 4
+VERSAO_SCHEMA = 5
 
 _CORTE_RELATIVO = 0.65
 
@@ -165,6 +165,22 @@ CREATE INDEX IF NOT EXISTS idx_push_inscricoes_pessoa
 """
 
 
+_SQL_V5 = """
+CREATE TABLE IF NOT EXISTS texto_diario_assinaturas (
+    pessoa_id TEXT PRIMARY KEY REFERENCES pessoas(id) ON DELETE CASCADE,
+    ativo INTEGER NOT NULL DEFAULT 0,
+    hora TEXT NOT NULL DEFAULT '07:00',
+    fuso TEXT NOT NULL DEFAULT 'America/Sao_Paulo',
+    conversa_id TEXT REFERENCES conversas(id) ON DELETE SET NULL,
+    ultimo_envio_dia TEXT,
+    criado_em TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_texto_diario_ativos
+    ON texto_diario_assinaturas(ativo);
+"""
+
+
 def agora() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -203,6 +219,9 @@ class Banco:
             if versao < 4:
                 conn.executescript(_SQL_V4)
                 conn.execute("PRAGMA user_version = 4")
+            if versao < 5:
+                conn.executescript(_SQL_V5)
+                conn.execute("PRAGMA user_version = 5")
 
     @contextmanager
     def _conexao(self) -> Iterator[sqlite3.Connection]:
@@ -461,6 +480,54 @@ class Banco:
     ) -> bool:
         return await to_thread.run_sync(
             self._reivindicar_lembrete, compromisso_id, momento
+        )
+
+    async def obter_assinatura_texto_diario(
+        self, pessoa_id: str
+    ) -> dict | None:
+        return await to_thread.run_sync(
+            self._obter_assinatura_texto_diario, pessoa_id
+        )
+
+    async def salvar_assinatura_texto_diario(
+        self,
+        pessoa_id: str,
+        ativo: bool,
+        hora: str,
+        fuso: str,
+    ) -> dict:
+        return await to_thread.run_sync(
+            self._salvar_assinatura_texto_diario,
+            pessoa_id,
+            ativo,
+            hora,
+            fuso,
+        )
+
+    async def listar_assinaturas_texto_diario(self) -> list[dict]:
+        return await to_thread.run_sync(
+            self._listar_assinaturas_texto_diario
+        )
+
+    async def reivindicar_texto_diario(
+        self, pessoa_id: str, dia: str
+    ) -> bool:
+        return await to_thread.run_sync(
+            self._reivindicar_texto_diario, pessoa_id, dia
+        )
+
+    async def liberar_texto_diario(
+        self, pessoa_id: str, dia: str
+    ) -> None:
+        await to_thread.run_sync(
+            self._liberar_texto_diario, pessoa_id, dia
+        )
+
+    async def definir_conversa_texto_diario(
+        self, pessoa_id: str, conversa_id: str
+    ) -> None:
+        await to_thread.run_sync(
+            self._definir_conversa_texto_diario, pessoa_id, conversa_id
         )
 
     async def criar_inscricao(
@@ -849,6 +916,85 @@ class Banco:
                 (momento, compromisso_id),
             )
             return resultado.rowcount > 0
+
+    def _obter_assinatura_texto_diario(
+        self, pessoa_id: str
+    ) -> dict | None:
+        with self._conexao() as conn:
+            linha = conn.execute(
+                "SELECT * FROM texto_diario_assinaturas WHERE pessoa_id = ?",
+                (pessoa_id,),
+            ).fetchone()
+            if linha is None:
+                return None
+            dados = dict(linha)
+            dados["ativo"] = bool(dados["ativo"])
+            return dados
+
+    def _salvar_assinatura_texto_diario(
+        self, pessoa_id: str, ativo: bool, hora: str, fuso: str
+    ) -> dict:
+        momento = agora()
+        with self._conexao() as conn:
+            conn.execute(
+                "INSERT INTO texto_diario_assinaturas "
+                "(pessoa_id, ativo, hora, fuso, criado_em, atualizado_em) "
+                "VALUES (?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(pessoa_id) DO UPDATE SET "
+                "ativo = excluded.ativo, hora = excluded.hora, "
+                "fuso = excluded.fuso, atualizado_em = excluded.atualizado_em",
+                (pessoa_id, int(bool(ativo)), hora, fuso, momento, momento),
+            )
+            linha = conn.execute(
+                "SELECT * FROM texto_diario_assinaturas WHERE pessoa_id = ?",
+                (pessoa_id,),
+            ).fetchone()
+            dados = dict(linha)
+            dados["ativo"] = bool(dados["ativo"])
+            return dados
+
+    def _listar_assinaturas_texto_diario(self) -> list[dict]:
+        with self._conexao() as conn:
+            return [
+                {**dict(linha), "ativo": bool(linha["ativo"])}
+                for linha in conn.execute(
+                    "SELECT * FROM texto_diario_assinaturas "
+                    "WHERE ativo = 1 ORDER BY pessoa_id"
+                )
+            ]
+
+    def _reivindicar_texto_diario(
+        self, pessoa_id: str, dia: str
+    ) -> bool:
+        with self._conexao() as conn:
+            resultado = conn.execute(
+                "UPDATE texto_diario_assinaturas "
+                "SET ultimo_envio_dia = ?, atualizado_em = ? "
+                "WHERE pessoa_id = ? "
+                "AND (ultimo_envio_dia IS NULL OR ultimo_envio_dia != ?)",
+                (dia, agora(), pessoa_id, dia),
+            )
+            return resultado.rowcount > 0
+
+    def _liberar_texto_diario(self, pessoa_id: str, dia: str) -> None:
+        with self._conexao() as conn:
+            conn.execute(
+                "UPDATE texto_diario_assinaturas "
+                "SET ultimo_envio_dia = NULL, atualizado_em = ? "
+                "WHERE pessoa_id = ? AND ultimo_envio_dia = ?",
+                (agora(), pessoa_id, dia),
+            )
+
+    def _definir_conversa_texto_diario(
+        self, pessoa_id: str, conversa_id: str
+    ) -> None:
+        with self._conexao() as conn:
+            conn.execute(
+                "UPDATE texto_diario_assinaturas "
+                "SET conversa_id = ?, atualizado_em = ? "
+                "WHERE pessoa_id = ?",
+                (conversa_id, agora(), pessoa_id),
+            )
 
     def _criar_inscricao(
         self,

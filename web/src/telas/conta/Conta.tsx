@@ -23,6 +23,7 @@ import { Marca } from '../../componentes/Marca'
 import { SecaoAjustes } from './Ajustes'
 import { SecaoMemorias } from './Memorias'
 import { SecaoMicrofone } from './Microfone'
+import { SecaoTextoDiario } from './TextoDiario'
 import estilos from './Conta.module.css'
 
 type Saude = 'verificando' | 'ok' | 'falha'
@@ -215,6 +216,8 @@ export function Conta() {
           aoApagar={apagarAjuste}
           aoTentarDeNovo={() => void carregarDados()}
         />
+
+        <SecaoTextoDiario pessoaId={pessoa.id} api={api} sair={sair} />
 
         <SecaoMicrofone />
 

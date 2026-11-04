@@ -103,7 +103,8 @@ novo).
 
 O Render free dorme sem tráfego, então um laço em memória não basta. O
 workflow `.github/workflows/lembretes.yml` chama `/notificacoes/disparar` a
-cada 5 minutos. Configure os secrets:
+cada 5 minutos. O mesmo endpoint também entrega o texto diário configurado
+por pessoa — veja `docs/texto-diario.md`. Configure os secrets:
 
 - `SERA_API_URL` — URL da API (ex.: `https://sera-api.onrender.com`)
 - `SERA_NOTIFICACOES_SEGREDO` — o mesmo valor de `NOTIFICACOES_SEGREDO`

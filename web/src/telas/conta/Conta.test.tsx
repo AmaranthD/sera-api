@@ -46,6 +46,27 @@ function montar(overrides: Record<string, unknown> = {}) {
     apagarMemoria: vi.fn().mockResolvedValue(null),
     atualizarAjuste: vi.fn().mockResolvedValue({ ...AJUSTE, texto: 'Sera' }),
     apagarAjuste: vi.fn().mockResolvedValue(null),
+    obterTextoDiario: vi.fn().mockResolvedValue({
+      ativo: false,
+      hora: '07:00',
+      fuso: 'America/Sao_Paulo',
+      conversa_id: null,
+      ultimo_envio_dia: null,
+    }),
+    salvarTextoDiario: vi.fn().mockResolvedValue({
+      ativo: true,
+      hora: '07:00',
+      fuso: 'America/Sao_Paulo',
+      conversa_id: null,
+      ultimo_envio_dia: null,
+    }),
+    enviarTextoDiarioAgora: vi.fn().mockResolvedValue({
+      conversa_id: 'conversa-1',
+      mensagem_id: 'mensagem-1',
+      dia: '2026-11-04',
+      enviados: 0,
+      falhas: 0,
+    }),
     exportarDados: vi.fn().mockResolvedValue({
       gerado_em: '2026-11-01T10:00:00Z',
       pessoa: PESSOA,

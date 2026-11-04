@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Any, Mapping
 
@@ -134,6 +135,27 @@ def payload_mensagem(
         "tipo": "mensagem",
         "conversa_id": conversa_id,
         "resposta_id": resposta_id,
+    }
+
+
+def payload_texto_diario(conversa_id: str, texto: Any) -> dict:
+    """Avisa que o texto diário chegou na conversa dedicada."""
+    tema = str(getattr(texto, "tema", "") or "")
+    tema = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", tema)
+    tema = " ".join(tema.replace("*", "").split())
+    limite = 160
+    corpo = tema[:limite].rstrip()
+    if len(tema) > limite:
+        corpo = f"{corpo}…"
+    dia = getattr(texto, "dia", None)
+    sufixo = dia.isoformat() if hasattr(dia, "isoformat") else "hoje"
+    return {
+        "titulo": "Texto diário de hoje",
+        "corpo": corpo or "O texto diário já está na sua conversa.",
+        "url": f"/c/{conversa_id}",
+        "tag": f"texto-diario-{sufixo}",
+        "tipo": "texto_diario",
+        "conversa_id": conversa_id,
     }
 
 

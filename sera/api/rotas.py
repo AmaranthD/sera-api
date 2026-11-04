@@ -10,7 +10,15 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 import anyio
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+)
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..prompt import (
@@ -41,6 +49,7 @@ from .ferramentas import (
     INSTRUCAO_JW,
     INSTRUCAO_JW_MODO,
     INSTRUCAO_MEMORIA,
+    INSTRUCAO_TEXTO_DIARIO,
     NOME_AGENDAR,
     NOME_AJUSTAR,
     NOME_CANCELAR_COMPROMISSO,
@@ -49,6 +58,7 @@ from .ferramentas import (
     NOME_JW,
     NOME_LEMBRAR,
     NOME_PESQUISA,
+    NOME_TEXTO_DIARIO,
     ContextoFerramentas,
     FerramentaDesconhecida,
     FerramentaInvalida,
@@ -63,6 +73,11 @@ from .ferramentas import (
     referencia_biblica,
 )
 from .jw import JWIndisponivel
+from .jw_conteudo import (
+    ConteudoJWIndisponivel,
+    URLJWInvalida,
+    buscar_conteudo_jw,
+)
 from .llm import (
     ChamadaFerramenta,
     ClienteLLM,
@@ -183,6 +198,26 @@ async def _conversa_do_chat(
     return await banco.criar_conversa(
         pessoa_id, _titulo_da_mensagem(mensagem)
     )
+
+
+@router.get("/jw/conteudo")
+async def conteudo_jw(
+    usuario: DependenciaUsuario,
+    url: str = Query(..., min_length=8, max_length=2000),
+):
+    """Conteúdo legível de uma página do jw.org para o modal do chat."""
+    del usuario
+    try:
+        conteudo = await buscar_conteudo_jw(url)
+    except URLJWInvalida as erro:
+        raise HTTPException(status_code=422, detail=str(erro)) from erro
+    except ConteudoJWIndisponivel as erro:
+        raise HTTPException(status_code=503, detail=str(erro)) from erro
+    return {
+        "titulo": conteudo.titulo,
+        "paragrafos": list(conteudo.paragrafos),
+        "url": conteudo.url,
+    }
 
 
 @router.post("/pessoas", status_code=201)
@@ -1017,17 +1052,21 @@ async def _preparar_ferramentas(
     aprendizado = config.aprendizado_habilitado and tool_calling
     agenda = tool_calling and not modo_jw
     jw = config.jw_ativa and tool_calling
+    texto_diario = tool_calling
     ferramentas = esquemas(
         busca=busca is not None and tool_calling,
         aprendizado=aprendizado,
         agenda=agenda,
         jw=jw,
         jw_ferramentas=ferramentas_jw_para(mensagem) if modo_jw else None,
+        texto_diario=texto_diario,
     )
     if jw:
         system = f"{system}\n\n{INSTRUCAO_JW}"
     if agenda:
         system = f"{system}\n\n{INSTRUCAO_AGENDA}"
+    if texto_diario:
+        system = f"{system}\n\n{INSTRUCAO_TEXTO_DIARIO}"
     fontes: list[dict] = []
     if modo_jw:
         system = f"{system}\n\n{INSTRUCAO_JW_MODO}"
@@ -1337,6 +1376,7 @@ async def _fluxo_com_ferramentas(
         INSTRUCAO_AGENDA,
         INSTRUCAO_JW,
         INSTRUCAO_JW_MODO,
+        INSTRUCAO_TEXTO_DIARIO,
     ):
         conteudo = conteudo.replace(instrucao, "")
     conversa[0]["content"] = (
@@ -1530,6 +1570,22 @@ def _nota_de_ferramenta(nome: str, resultado: dict) -> str:
             f"Cancelei: {cancelado.get('titulo')} em "
             f"{cancelado.get('inicio')}."
         )
+    if nome == NOME_TEXTO_DIARIO:
+        if not resultado.get("ok"):
+            return "Não consegui configurar o texto diário."
+        if resultado.get("entrega"):
+            entrega = resultado.get("entrega") or {}
+            return (
+                "Enviei o texto diário de "
+                f"{entrega.get('dia')} na conversa “Texto diário”."
+            )
+        assinatura = resultado.get("assinatura") or {}
+        if assinatura.get("ativo"):
+            return (
+                "Texto diário ativado para "
+                f"{assinatura.get('hora')} ({assinatura.get('fuso')})."
+            )
+        return "Texto diário desativado."
     if nome == NOME_LEMBRAR:
         if resultado.get("precisa_confirmar"):
             return (

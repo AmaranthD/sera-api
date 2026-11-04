@@ -23,6 +23,7 @@ from .ferramentas_base import (
     NOME_JW,
     NOME_LEMBRAR,
     NOME_PESQUISA,
+    NOME_TEXTO_DIARIO,
     _ler_argumentos,
 )
 from .ferramentas_busca import (
@@ -54,6 +55,11 @@ from .ferramentas_memoria import (
     _lembrar,
     consulta_esquecimento,
 )
+from .ferramentas_texto_diario import (
+    ESQUEMA_TEXTO_DIARIO,
+    INSTRUCAO_TEXTO_DIARIO,
+    _texto_diario,
+)
 
 __all__ = [
     "ContextoFerramentas",
@@ -67,11 +73,13 @@ __all__ = [
     "NOME_JW",
     "NOME_LEMBRAR",
     "NOME_PESQUISA",
+    "NOME_TEXTO_DIARIO",
     "INSTRUCAO_AGENDA",
     "INSTRUCAO_BUSCA",
     "INSTRUCAO_JW",
     "INSTRUCAO_JW_MODO",
     "INSTRUCAO_MEMORIA",
+    "INSTRUCAO_TEXTO_DIARIO",
     "ESQUEMA_JW",
     "bloco_resultados",
     "consulta_esquecimento",
@@ -94,6 +102,7 @@ def esquemas(
     agenda: bool = False,
     jw: bool = False,
     jw_ferramentas: Sequence[str] | None = None,
+    texto_diario: bool = False,
 ) -> list[dict]:
     lista: list[dict] = []
     if busca:
@@ -108,6 +117,8 @@ def esquemas(
                 ESQUEMA_CANCELAR_COMPROMISSO,
             )
         )
+    if texto_diario:
+        lista.append(ESQUEMA_TEXTO_DIARIO)
     if aprendizado:
         lista.extend((ESQUEMA_LEMBRAR, ESQUEMA_AJUSTAR, ESQUEMA_ESQUECER))
     return lista
@@ -143,6 +154,9 @@ async def executar_ferramenta(
 
     if nome == NOME_CANCELAR_COMPROMISSO:
         return await _cancelar_compromisso(dados, contexto)
+
+    if nome == NOME_TEXTO_DIARIO:
+        return await _texto_diario(dados, contexto)
 
     if nome == NOME_LEMBRAR:
         return await _lembrar(dados, contexto)

@@ -60,7 +60,7 @@ def criar_app(
     @asynccontextmanager
     async def ciclo(app: FastAPI):
         tarefa = None
-        if config.agenda_ativa:
+        if config.agenda_ativa or config.texto_diario_ativa:
             tarefa = asyncio.create_task(laco_lembretes(app, config))
         yield
         if tarefa is not None:
@@ -146,7 +146,14 @@ def criar_app(
             allow_origins=list(config.cors_origins),
             allow_origin_regex=config.cors_origin_regex,
             allow_credentials=False,
-            allow_methods=["GET", "POST", "DELETE", "PATCH", "OPTIONS"],
+            allow_methods=[
+                "GET",
+                "POST",
+                "PUT",
+                "DELETE",
+                "PATCH",
+                "OPTIONS",
+            ],
             allow_headers=["Authorization", "Content-Type"],
             max_age=600,
         )

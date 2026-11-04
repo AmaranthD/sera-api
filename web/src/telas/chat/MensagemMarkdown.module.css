@@ -115,6 +115,11 @@
   color: #f0c96a;
 }
 
+.markdown a.linkJw {
+  text-decoration-style: dotted;
+  cursor: pointer;
+}
+
 .markdown hr {
   margin: 1em 0;
   border: 0;

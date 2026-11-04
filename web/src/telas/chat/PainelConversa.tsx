@@ -7,6 +7,7 @@ import { Icone } from '../../componentes/Icone'
 import { useVoz } from '../../voz/contexto'
 import { falarResposta } from '../../voz/responder'
 import { useSessao } from '../../auth/contexto'
+import { JanelaJWProvider } from './JanelaJW'
 import { MensagemItem } from './MensagemItem'
 import estilos from './Chat.module.css'
 
@@ -117,63 +118,65 @@ export function PainelConversa({ aoSugerir }: { aoSugerir: (texto: string) => vo
   }
 
   return (
-    <div
-      className={estilos.rolagem}
-      ref={rolagemRef}
-      onScroll={(evento) => {
-        const alvo = evento.currentTarget
-        const distancia = alvo.scrollHeight - alvo.scrollTop - alvo.clientHeight
-        setPertoDoFim(distancia < 120)
-      }}
-    >
+    <JanelaJWProvider api={api}>
       <div
-        className={`${estilos.mensagens} ${
-          mensagens.length === 0 ? estilos.mensagensVazias : ''
-        }`}
-        role="log"
-        aria-label="Mensagens da conversa"
+        className={estilos.rolagem}
+        ref={rolagemRef}
+        onScroll={(evento) => {
+          const alvo = evento.currentTarget
+          const distancia = alvo.scrollHeight - alvo.scrollTop - alvo.clientHeight
+          setPertoDoFim(distancia < 120)
+        }}
       >
-        {conversaAtual ? (
-          <span className="srOnly">Conversa: {tituloDaConversa(conversaAtual)}</span>
-        ) : null}
-        {mensagens.map((mensagem) => (
-          <MensagemItem
-            key={mensagem.id}
-            mensagem={mensagem}
-            transcrevendo={
-              transcrevendo && mensagem === mensagens[mensagens.length - 1]
-            }
-            api={api}
-          />
-        ))}
-        {!conversaId && mensagens.length === 0 ? (
-          <p className={estilos.vazioLista}>Comece escrevendo abaixo.</p>
-        ) : null}
-        {conversaId && mensagens.length === 0 ? (
-          <p className={estilos.vazioLista}>
-            Essa conversa ainda não tem mensagens. Escreva abaixo para começar.
-          </p>
-        ) : null}
-        <div ref={fimRef} />
-      </div>
-
-      <div className="srOnly" aria-live="polite" aria-atomic="true">
-        {anuncio}
-      </div>
-
-      {!pertoDoFim && mensagens.length > 0 ? (
-        <button
-          type="button"
-          className={estilos.irParaFim}
-          onClick={() => {
-            setPertoDoFim(true)
-            rolarParaFim()
-          }}
+        <div
+          className={`${estilos.mensagens} ${
+            mensagens.length === 0 ? estilos.mensagensVazias : ''
+          }`}
+          role="log"
+          aria-label="Mensagens da conversa"
         >
-          <Icone nome="voltar" tamanho={15} />
-          Ir para o fim
-        </button>
-      ) : null}
-    </div>
+          {conversaAtual ? (
+            <span className="srOnly">Conversa: {tituloDaConversa(conversaAtual)}</span>
+          ) : null}
+          {mensagens.map((mensagem) => (
+            <MensagemItem
+              key={mensagem.id}
+              mensagem={mensagem}
+              transcrevendo={
+                transcrevendo && mensagem === mensagens[mensagens.length - 1]
+              }
+              api={api}
+            />
+          ))}
+          {!conversaId && mensagens.length === 0 ? (
+            <p className={estilos.vazioLista}>Comece escrevendo abaixo.</p>
+          ) : null}
+          {conversaId && mensagens.length === 0 ? (
+            <p className={estilos.vazioLista}>
+              Essa conversa ainda não tem mensagens. Escreva abaixo para começar.
+            </p>
+          ) : null}
+          <div ref={fimRef} />
+        </div>
+
+        <div className="srOnly" aria-live="polite" aria-atomic="true">
+          {anuncio}
+        </div>
+
+        {!pertoDoFim && mensagens.length > 0 ? (
+          <button
+            type="button"
+            className={estilos.irParaFim}
+            onClick={() => {
+              setPertoDoFim(true)
+              rolarParaFim()
+            }}
+          >
+            <Icone nome="voltar" tamanho={15} />
+            Ir para o fim
+          </button>
+        ) : null}
+      </div>
+    </JanelaJWProvider>
   )
 }

@@ -1,15 +1,19 @@
 import type {
   Ajuste,
+  AssinaturaTextoDiario,
   AtualizacaoAjuste,
   AtualizacaoCompromisso,
   AtualizacaoMemoria,
   Compromisso,
+  ConteudoJW,
   Conversa,
   DadosExportados,
   EntradaChat,
   EntradaCompromisso,
   EntradaInscricaoPush,
   EntradaPessoa,
+  EntradaTextoDiario,
+  EntregaTextoDiario,
   EventoChat,
   InscricaoPush,
   Memoria,
@@ -230,5 +234,34 @@ export class ApiSera {
       `/pessoas/${encodeURIComponent(pessoaId)}/notificacoes/teste`,
       { metodo: 'POST' },
     )
+  }
+
+  obterTextoDiario(pessoaId: string): Promise<AssinaturaTextoDiario> {
+    return this.http.json<AssinaturaTextoDiario>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/texto-diario`,
+    )
+  }
+
+  salvarTextoDiario(
+    pessoaId: string,
+    dados: EntradaTextoDiario,
+  ): Promise<AssinaturaTextoDiario> {
+    return this.http.json<AssinaturaTextoDiario>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/texto-diario`,
+      { metodo: 'PUT', corpo: dados },
+    )
+  }
+
+  enviarTextoDiarioAgora(pessoaId: string): Promise<EntregaTextoDiario> {
+    return this.http.json<EntregaTextoDiario>(
+      `/pessoas/${encodeURIComponent(pessoaId)}/texto-diario/enviar`,
+      { metodo: 'POST' },
+    )
+  }
+
+  conteudoJW(url: string): Promise<ConteudoJW> {
+    return this.http.json<ConteudoJW>(`/jw/conteudo?url=${encodeURIComponent(url)}`, {
+      tempoLimiteMs: 25_000,
+    })
   }
 }

@@ -589,6 +589,89 @@ class BancoSupabase:
         )
         return bool(dados)
 
+    async def obter_assinatura_texto_diario(
+        self, pessoa_id: str
+    ) -> dict | None:
+        dados = await self._req(
+            "GET",
+            "texto_diario_assinaturas",
+            params={"select": "*", "pessoa_id": f"eq.{pessoa_id}"},
+        )
+        return _primeiro(dados)
+
+    async def salvar_assinatura_texto_diario(
+        self,
+        pessoa_id: str,
+        ativo: bool,
+        hora: str,
+        fuso: str,
+    ) -> dict:
+        resultado = await self._req(
+            "POST",
+            "texto_diario_assinaturas",
+            params={"on_conflict": "pessoa_id"},
+            corpo={
+                "pessoa_id": pessoa_id,
+                "ativo": ativo,
+                "hora": hora,
+                "fuso": fuso,
+                "atualizado_em": agora(),
+            },
+            prefer="resolution=merge-duplicates,return=representation",
+        )
+        return _um(resultado)
+
+    async def listar_assinaturas_texto_diario(self) -> list[dict]:
+        return await self._req(
+            "GET",
+            "texto_diario_assinaturas",
+            params={
+                "select": "*",
+                "ativo": "eq.true",
+                "order": "pessoa_id.asc",
+            },
+        ) or []
+
+    async def reivindicar_texto_diario(
+        self, pessoa_id: str, dia: str
+    ) -> bool:
+        dados = await self._req(
+            "PATCH",
+            "texto_diario_assinaturas",
+            params={
+                "pessoa_id": f"eq.{pessoa_id}",
+                "or": f"(ultimo_envio_dia.is.null,ultimo_envio_dia.neq.{dia})",
+            },
+            corpo={"ultimo_envio_dia": dia, "atualizado_em": agora()},
+            prefer="return=representation",
+        )
+        return bool(dados)
+
+    async def liberar_texto_diario(
+        self, pessoa_id: str, dia: str
+    ) -> None:
+        await self._req(
+            "PATCH",
+            "texto_diario_assinaturas",
+            params={
+                "pessoa_id": f"eq.{pessoa_id}",
+                "ultimo_envio_dia": f"eq.{dia}",
+            },
+            corpo={"ultimo_envio_dia": None, "atualizado_em": agora()},
+            prefer="return=minimal",
+        )
+
+    async def definir_conversa_texto_diario(
+        self, pessoa_id: str, conversa_id: str
+    ) -> None:
+        await self._req(
+            "PATCH",
+            "texto_diario_assinaturas",
+            params={"pessoa_id": f"eq.{pessoa_id}"},
+            corpo={"conversa_id": conversa_id, "atualizado_em": agora()},
+            prefer="return=minimal",
+        )
+
     async def criar_inscricao(
         self,
         pessoa_id: str,

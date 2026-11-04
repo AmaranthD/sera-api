@@ -1,6 +1,6 @@
 import { ErroApi, erroDaResposta, erroDeRede } from './erros'
 
-export type Metodo = 'GET' | 'POST' | 'DELETE' | 'PATCH'
+export type Metodo = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
 
 export interface OpcoesHttp {
   metodo?: Metodo
