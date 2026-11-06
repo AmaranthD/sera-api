@@ -26,6 +26,7 @@ from .llm import (
     ClienteLLM,
     ClienteOpenAICompat,
 )
+from .root import Root
 from .rotas import router
 from .tts import router as router_tts
 from .webpush import validar_chaves
@@ -120,16 +121,22 @@ def criar_app(
     app.state.personality = personality
     app.state.autenticador = autenticador
     app.state.jobs = GerenciadorJobs()
+    app.state.root = Root(config)
     if config.auth_required and app.state.autenticador is None:
         app.state.autenticador = AutenticadorSupabase(config)
 
     logger.info(
-        "Sera iniciada: backend=%s provedor=%s modelo=%s auth=%s",
+        "Sera iniciada: backend=%s provedor=%s modelo=%s base=%s auth=%s",
         "supabase" if fabrica is not None else f"sqlite:{config.db_path}",
         config.llm_provider,
         config.llm_model,
+        config.llm_base_url,
         "jwt" if config.auth_required else "dev",
     )
+    if config.root_senha == "12345":
+        logger.warning(
+            "modo root usando a senha padrão; defina SERA_ROOT_SENHA"
+        )
     if config.auth_required and not config.emails_permitidos:
         logger.warning(
             "SERA_EMAILS não definido: qualquer conta autenticada pode usar "

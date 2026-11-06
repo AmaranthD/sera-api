@@ -9,6 +9,7 @@ import anyio
 import httpx
 
 from .config import Config
+from .root import DIAGNOSTICO
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class Uso:
 @dataclass(frozen=True)
 class Fim:
     uso: Uso | None = None
+    modelo: str | None = None
 
 
 Evento = Delta | Ferramenta | Fim
@@ -179,7 +181,7 @@ class ClienteGemini:
                 raise _traduzir_erro_gemini(erro) from erro
             raise
 
-        yield Fim(uso)
+        yield Fim(uso, self._config.llm_model)
 
 
 class ClienteOpenAICompat:
@@ -335,7 +337,10 @@ class ClienteOpenAICompat:
                     if chamadas:
                         yield Ferramenta(tuple(chamadas))
                     bruto_uso = bruto.get("usage")
-                    yield Fim(_uso_de(bruto_uso) if bruto_uso else None)
+                    yield Fim(
+                        _uso_de(bruto_uso) if bruto_uso else None,
+                        self._config.llm_model,
+                    )
                     return
 
                 acumuladas: dict[int, dict] = {}
@@ -382,7 +387,7 @@ class ClienteOpenAICompat:
         chamadas = _chamadas_acumuladas(acumuladas)
         if chamadas:
             yield Ferramenta(tuple(chamadas))
-        yield Fim(uso)
+        yield Fim(uso, self._config.llm_model)
 
 
 class ClienteComFallback:
@@ -421,11 +426,13 @@ class ClienteComFallback:
         except ErroDoProvedor as erro:
             if emitido:
                 raise
+            DIAGNOSTICO.erro("llm_principal", str(erro))
             logger.warning(
                 "provedor principal falhou antes do primeiro token (%s); "
                 "usando fallback",
                 erro,
             )
+        DIAGNOSTICO.fallback()
         async for evento in self._reserva.stream(
             mensagens,
             temperatura=temperatura,

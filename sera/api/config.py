@@ -97,6 +97,7 @@ class Config:
     cors_origin_regex: str | None = None
     emails_permitidos: tuple[str, ...] = ()
     auth_required: bool = False
+    root_senha: str = "12345"
 
     def __post_init__(self) -> None:
         if self.max_tokens <= 0:
@@ -145,6 +146,11 @@ class Config:
             raise ValueError(
                 f"llm_provider inválido: {self.llm_provider!r}; "
                 "use 'gemini' ou 'openai'"
+            )
+        if self.root_senha and len(self.root_senha) < 4:
+            raise ValueError(
+                "root_senha precisa ter pelo menos 4 caracteres "
+                "(ou ficar vazia para desativar o modo root)"
             )
         if not self.llm_model.strip():
             raise ValueError("llm_model é obrigatório")
@@ -365,4 +371,5 @@ class Config:
             ),
             auth_required=texto("SERA_DEV", "").lower()
             not in ("1", "true", "yes", "on"),
+            root_senha=texto("SERA_ROOT_SENHA", "12345"),
         )

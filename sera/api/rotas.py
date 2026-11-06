@@ -91,6 +91,7 @@ from .llm import (
 )
 from .tempo import agora as agora_do_fuso
 from .relogio import bloco_agora, normalizar_consulta
+from .root import DIAGNOSTICO
 from .schemas import (
     AjusteAtualizacao,
     AjusteEntrada,
@@ -607,14 +608,26 @@ async def chat(
         banco, pessoa_id, corpo.conversa_id, corpo.mensagem
     )
 
-    historico = await banco.ultimas_mensagens(
-        conversa["id"], config.max_history_mensagens
-    )
-    _cortar_historico(historico, config.max_history_chars)
+    comando = _comando_root(request.app, conversa["id"], corpo.mensagem)
+    if comando is None:
+        historico = await banco.ultimas_mensagens(
+            conversa["id"], config.max_history_mensagens
+        )
+        _cortar_historico(historico, config.max_history_chars)
 
     mensagem_usuario = await banco.criar_mensagem(
-        conversa["id"], "user", corpo.mensagem
+        conversa["id"],
+        "user",
+        comando.texto_usuario if comando is not None else corpo.mensagem,
     )
+    if comando is not None:
+        return await _resposta_comando(
+            banco,
+            conversa["id"],
+            mensagem_usuario["id"],
+            comando.resposta,
+            stream=corpo.stream,
+        )
 
     async def preparar():
         if modo_jw:
@@ -733,9 +746,25 @@ async def chat_job(
                 em_andamento.get("fontes"),
             )
 
+        comando = _comando_root(request.app, conversa["id"], corpo.mensagem)
         mensagem_usuario = await banco.criar_mensagem(
-            conversa["id"], "user", corpo.mensagem
+            conversa["id"],
+            "user",
+            comando.texto_usuario if comando is not None else corpo.mensagem,
         )
+        if comando is not None:
+            resposta = await banco.criar_mensagem(
+                conversa["id"], "assistant", comando.resposta
+            )
+            logger.info(
+                "comando root respondido: conversa=%s", conversa["id"]
+            )
+            return {
+                "conversa_id": conversa["id"],
+                "mensagem_id": mensagem_usuario["id"],
+                "resposta_id": resposta["id"],
+                "status": "completa",
+            }
         resposta = await banco.criar_mensagem(
             conversa["id"], "assistant", "", "gerando"
         )
@@ -897,6 +926,7 @@ async def _rodar_job(
     partes: list[str] = []
     fontes: list[dict] = []
     ultimo_salvo = 0.0
+    modelo = config.llm_model
     try:
         if modo_jw:
             aquecer = getattr(getattr(app.state, "jw", None), "aquecer", None)
@@ -980,6 +1010,8 @@ async def _rodar_job(
                 for fonte in evento.fontes:
                     if all(item["url"] != fonte["url"] for item in fontes):
                         fontes.append(dict(fonte))
+            elif isinstance(evento, Fim):
+                modelo = evento.modelo or modelo
 
             instante = time.monotonic()
             if instante - ultimo_salvo >= 1.2:
@@ -1000,7 +1032,12 @@ async def _rodar_job(
             resposta_id,
             resposta,
         )
-        logger.info("job de chat concluído: resposta=%s", resposta_id)
+        logger.info(
+            "job de chat concluído: resposta=%s modelo=%s",
+            resposta_id,
+            modelo,
+        )
+        DIAGNOSTICO.sucesso(modelo)
     except asyncio.CancelledError:
         with anyio.CancelScope(shield=True):
             await banco.atualizar_mensagem(
@@ -1010,6 +1047,7 @@ async def _rodar_job(
         raise
     except ErroDoProvedor as erro:
         logger.warning("provedor falhou no job: %s", erro.detalhe)
+        DIAGNOSTICO.erro("llm", erro.detalhe)
         await banco.atualizar_mensagem(
             resposta_id, "".join(partes), "erro", fontes
         )
@@ -1024,6 +1062,7 @@ async def _rodar_job(
         )
     except Exception:
         logger.exception("falha inesperada no job de chat")
+        DIAGNOSTICO.erro("interno", "falha inesperada no job de chat")
         await banco.atualizar_mensagem(
             resposta_id, "".join(partes), "erro", fontes
         )
@@ -1331,6 +1370,7 @@ async def _resposta_unica(
     contexto = contexto or ContextoFerramentas()
     partes: list[str] = []
     uso: Uso | None = None
+    modelo = config.llm_model
     try:
         async for evento in _fluxo_com_ferramentas(
             llm,
@@ -1345,19 +1385,23 @@ async def _resposta_unica(
                 partes.append(evento.texto)
             elif isinstance(evento, Fim):
                 uso = _somar_uso(uso, evento.uso)
+                modelo = evento.modelo or modelo
     except ErroDoProvedor as erro:
         logger.warning("provedor falhou: %s", erro.detalhe)
+        DIAGNOSTICO.erro("llm", erro.detalhe)
         raise HTTPException(
             status_code=502, detail=f"provedor falhou: {erro.detalhe}"
         ) from erro
 
     texto = "".join(partes)
     mensagem = await banco.criar_mensagem(conversa_id, "assistant", texto)
+    DIAGNOSTICO.sucesso(modelo)
+    logger.info("chat concluído: conversa=%s modelo=%s", conversa_id, modelo)
     return {
         "conversa_id": conversa_id,
         "mensagem_id": mensagem["id"],
         "resposta": texto,
-        "modelo": config.llm_model,
+        "modelo": modelo,
         "uso": _uso_dict(uso),
     }
 
@@ -1740,6 +1784,7 @@ async def _resposta_stream(
     async def gerar():
         partes: list[str] = []
         uso: Uso | None = None
+        modelo = config.llm_model
         # Envia o `start` antes de qualquer ida ao banco ou ao provedor para
         # o app já mostrar "digitando" e medir o atraso real do modelo.
         yield _sse(
@@ -1772,6 +1817,7 @@ async def _resposta_stream(
                     yield _sse("token", {"texto": evento.texto})
                 elif isinstance(evento, Fim):
                     uso = _somar_uso(uso, evento.uso)
+                    modelo = evento.modelo or modelo
                 elif isinstance(evento, Pesquisando):
                     yield _sse(
                         "tool",
@@ -1793,12 +1839,18 @@ async def _resposta_stream(
             mensagem = await banco.criar_mensagem(
                 conversa_id, "assistant", "".join(partes)
             )
+            DIAGNOSTICO.sucesso(modelo)
+            logger.info(
+                "chat concluído: conversa=%s modelo=%s",
+                conversa_id,
+                modelo,
+            )
             yield _sse(
                 "done",
                 {
                     "conversa_id": conversa_id,
                     "mensagem_id": mensagem["id"],
-                    "modelo": config.llm_model,
+                    "modelo": modelo,
                     "uso": _uso_dict(uso),
                 },
             )
@@ -1810,12 +1862,14 @@ async def _resposta_stream(
                     )
             raise
         except HTTPException as erro:
+            DIAGNOSTICO.erro("indisponivel", str(erro.detail))
             yield _sse(
                 "error",
                 {"codigo": "indisponivel", "detalhe": str(erro.detail)},
             )
         except ErroDoProvedor as erro:
             logger.warning("provedor falhou no stream: %s", erro.detalhe)
+            DIAGNOSTICO.erro("llm", erro.detalhe)
             if partes:
                 await banco.criar_mensagem(
                     conversa_id, "assistant", "".join(partes), "erro"
@@ -1823,6 +1877,7 @@ async def _resposta_stream(
             yield _sse("error", {"codigo": "llm_falhou", "detalhe": erro.detalhe})
         except Exception:
             logger.exception("falha inesperada no stream")
+            DIAGNOSTICO.erro("interno", "falha inesperada no stream")
             if partes:
                 await banco.criar_mensagem(
                     conversa_id, "assistant", "".join(partes), "erro"
@@ -1830,6 +1885,59 @@ async def _resposta_stream(
             yield _sse(
                 "error", {"codigo": "interno", "detalhe": "falha inesperada"}
             )
+
+    return StreamingResponse(
+        gerar(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def _comando_root(app: FastAPI, conversa_id: str, texto: str):
+    root = getattr(app.state, "root", None)
+    if root is None:
+        return None
+    return root.processar(conversa_id, texto)
+
+
+async def _resposta_comando(
+    banco: Banco,
+    conversa_id: str,
+    mensagem_usuario_id: str,
+    texto: str,
+    *,
+    stream: bool,
+) -> dict | StreamingResponse:
+    if not stream:
+        mensagem = await banco.criar_mensagem(conversa_id, "assistant", texto)
+        return {
+            "conversa_id": conversa_id,
+            "mensagem_id": mensagem["id"],
+            "resposta": texto,
+            "modelo": "root",
+            "uso": _uso_dict(None),
+        }
+
+    mensagem = await banco.criar_mensagem(conversa_id, "assistant", texto)
+
+    async def gerar():
+        yield _sse(
+            "start",
+            {"conversa_id": conversa_id, "mensagem_id": mensagem_usuario_id},
+        )
+        yield _sse("token", {"texto": texto})
+        yield _sse(
+            "done",
+            {
+                "conversa_id": conversa_id,
+                "mensagem_id": mensagem["id"],
+                "modelo": "root",
+                "uso": _uso_dict(None),
+            },
+        )
 
     return StreamingResponse(
         gerar(),
