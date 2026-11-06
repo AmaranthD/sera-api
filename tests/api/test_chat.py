@@ -214,14 +214,21 @@ async def test_nao_mencionar_silencia_fato(cliente, fake):
     assert "Tópicos que não devem ser trazidos à conversa: separação." in prompt
 
 
-async def test_falha_antes_do_primeiro_token_responde_502(cliente, fake):
+async def test_falha_antes_do_primeiro_token_emite_error_no_stream(
+    cliente, fake
+):
     await criar_pessoa(cliente)
     fake.falhar_antes = True
 
     streaming = await cliente.post(
         "/chat", json={"pessoa_id": "maria", "mensagem": "oi"}
     )
-    assert streaming.status_code == 502
+    # O `start` já saiu; a falha do provedor vira evento, não status HTTP.
+    assert streaming.status_code == 200
+    ev = eventos(streaming.text)
+    assert ev[0][0] == "start"
+    assert ev[-1][0] == "error"
+    assert ev[-1][1]["codigo"] == "llm_falhou"
 
     unico = await cliente.post(
         "/chat",
@@ -354,6 +361,24 @@ async def test_busca_desligada_nao_passa_ferramentas(cliente, fake):
     assert "pesquisar_web" not in nomes
     # O aprendizado continua disponível mesmo com a busca desligada.
     assert {"lembrar", "ajustar_preferencia"} <= nomes
+
+
+async def test_ferramentas_de_assunto_so_entram_quando_pedidas(cliente, fake):
+    await criar_pessoa(cliente)
+    await cliente.post(
+        "/chat", json={"pessoa_id": "maria", "mensagem": "Oi, Sera"}
+    )
+    nomes = {item["function"]["name"] for item in (fake.ferramentas or [])}
+    assert "agendar" not in nomes
+    assert "texto_diario" not in nomes
+    assert "jw" not in nomes
+
+    await cliente.post(
+        "/chat",
+        json={"pessoa_id": "maria", "mensagem": "Agende uma consulta amanhã"},
+    )
+    nomes = {item["function"]["name"] for item in (fake.ferramentas or [])}
+    assert "agendar" in nomes
 
 
 async def test_pesquisa_explicita_consulta_antes_do_modelo(config, fake):

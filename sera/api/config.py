@@ -51,6 +51,9 @@ class Config:
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: str | None = None
     llm_model: str = "gemini-3.8-flash"
+    llm_fallback_base_url: str | None = None
+    llm_fallback_api_key: str | None = None
+    llm_fallback_model: str | None = None
     temperatura: float = 0.8
     max_tokens: int = 1024
     connect_timeout: float = 10.0
@@ -153,6 +156,28 @@ class Config:
                 f"llm_base_url inválida: {self.llm_base_url!r}; "
                 "use uma URL http(s) absoluta"
             )
+        if any(
+            (
+                self.llm_fallback_base_url,
+                self.llm_fallback_api_key,
+                self.llm_fallback_model,
+            )
+        ):
+            if not (self.llm_fallback_base_url and self.llm_fallback_model):
+                raise ValueError(
+                    "defina LLM_FALLBACK_BASE_URL e LLM_FALLBACK_MODEL "
+                    "juntas para ativar o fallback"
+                )
+            partes_fallback = urlparse(self.llm_fallback_base_url.strip())
+            if (
+                partes_fallback.scheme not in ("http", "https")
+                or not partes_fallback.netloc
+            ):
+                raise ValueError(
+                    f"llm_fallback_base_url inválida: "
+                    f"{self.llm_fallback_base_url!r}; use uma URL http(s) "
+                    "absoluta"
+                )
         if self.auth_required and not self.supabase_url:
             raise ValueError(
                 "SUPABASE_URL é obrigatória quando a autenticação está ligada; "
@@ -180,6 +205,20 @@ class Config:
 
     def _base_limpa(self) -> str:
         return self.llm_base_url.strip().rstrip("/")
+
+    def _base_fallback_limpa(self) -> str:
+        return (self.llm_fallback_base_url or "").strip().rstrip("/")
+
+    @property
+    def fallback_ativa(self) -> bool:
+        return bool(self.llm_fallback_base_url and self.llm_fallback_model)
+
+    @property
+    def url_chat_fallback(self) -> str:
+        base = self._base_fallback_limpa()
+        if base.endswith("/chat/completions"):
+            return base
+        return f"{base}/chat/completions"
 
     @property
     def busca_ativa(self) -> bool:
@@ -261,6 +300,9 @@ class Config:
             llm_base_url=texto("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
             llm_api_key=opcional("LLM_API_KEY"),
             llm_model=texto("LLM_MODEL", "gemini-3.8-flash"),
+            llm_fallback_base_url=opcional("LLM_FALLBACK_BASE_URL"),
+            llm_fallback_api_key=opcional("LLM_FALLBACK_API_KEY"),
+            llm_fallback_model=opcional("LLM_FALLBACK_MODEL"),
             temperatura=numero("LLM_TEMPERATURE", 0.8),
             max_tokens=inteiro("LLM_MAX_TOKENS", 1024),
             connect_timeout=numero("LLM_CONNECT_TIMEOUT", 10.0),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
@@ -44,6 +45,7 @@ class BancoSupabase:
             raise ValueError("token do usuário é obrigatório")
 
         base = config.supabase_url.rstrip("/")
+        self._transporte_proprio = transporte is None
         self._http = httpx.AsyncClient(
             base_url=f"{base}/rest/v1/",
             timeout=httpx.Timeout(20.0, connect=10.0),
@@ -57,7 +59,8 @@ class BancoSupabase:
         )
 
     async def fechar(self) -> None:
-        await self._http.aclose()
+        if self._transporte_proprio:
+            await self._http.aclose()
 
     async def _req(
         self,
@@ -188,27 +191,28 @@ class BancoSupabase:
         status: str = "completa",
         fontes: Sequence[dict] | None = None,
     ) -> dict:
-        dados = await self._req(
-            "POST",
-            "mensagens",
-            corpo={
-                "conversa_id": conversa_id,
-                "papel": papel,
-                "conteudo": conteudo,
-                "status": status,
-                "fontes": list(fontes or []),
-            },
-            prefer="return=representation",
+        dados, _ = await asyncio.gather(
+            self._req(
+                "POST",
+                "mensagens",
+                corpo={
+                    "conversa_id": conversa_id,
+                    "papel": papel,
+                    "conteudo": conteudo,
+                    "status": status,
+                    "fontes": list(fontes or []),
+                },
+                prefer="return=representation",
+            ),
+            self._req(
+                "PATCH",
+                "conversas",
+                params={"id": f"eq.{conversa_id}"},
+                corpo={"atualizada_em": agora()},
+                prefer="return=minimal",
+            ),
         )
-        mensagem = _um(dados)
-        await self._req(
-            "PATCH",
-            "conversas",
-            params={"id": f"eq.{conversa_id}"},
-            corpo={"atualizada_em": agora()},
-            prefer="return=minimal",
-        )
-        return mensagem
+        return _um(dados)
 
     async def atualizar_mensagem(
         self,

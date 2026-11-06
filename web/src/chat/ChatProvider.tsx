@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ehSessaoExpirada, ErroApi, mensagemDoErro } from '../api/erros'
+import { ehSessaoExpirada, mensagemDoErro } from '../api/erros'
 import { aquecerApi } from '../api/aquecimento'
-import type { Conversa, Mensagem } from '../dominios/tipos'
+import type { Conversa, Fonte, Mensagem } from '../dominios/tipos'
 import { normalizarMensagem } from '../dominios/texto'
 import { useSessao } from '../auth/contexto'
 import { usePessoa } from '../pessoa/contexto'
 import { ChatContext, type StatusChat } from './contexto'
 
-const INTERVALO_POLL_MS = 900
 const LIMITE_JOB_MS = 5 * 60 * 1000
 
 let contadorLocal = 0
@@ -28,9 +27,14 @@ function idDaRota(pathname: string): string | null {
   }
 }
 
-interface JobAtivo {
-  conversaId: string
-  respostaId: string
+interface FluxoAtivo {
+  conversaId: string | null
+  mensagemUsuarioId: string
+  mensagemAssistenteId: string
+  partes: string
+  fontes: Fonte[]
+  controller: AbortController
+  motivoAborto: 'usuario' | 'limite' | null
 }
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
@@ -47,16 +51,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [carregandoConversas, setCarregandoConversas] = useState(false)
   const [carregandoMensagens, setCarregandoMensagens] = useState(false)
   const [textoParaReenviar, setTextoParaReenviar] = useState<string | null>(null)
-  const [jobAtivo, setJobAtivo] = useState<JobAtivo | null>(null)
-  const [gatilhoPoll, setGatilhoPoll] = useState(0)
 
   const conversaIdRef = useRef<string | null>(null)
   const statusRef = useRef<StatusChat>('ocioso')
   const montadoRef = useRef(true)
-  const inicioJobRef = useRef(0)
   const textoEnviadoRef = useRef('')
   const enviandoRef = useRef(false)
-  const cancelarPedidoRef = useRef(false)
+  const fluxoRef = useRef<FluxoAtivo | null>(null)
 
   const mudarStatus = useCallback((novo: StatusChat) => {
     statusRef.current = novo
@@ -92,21 +93,33 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       try {
         const lista = await api.listarMensagens(id)
         if (conversaIdRef.current !== id) return
-        setMensagens(lista)
 
-        const gerando = [...lista]
-          .reverse()
-          .find(
-            (mensagem) =>
-              mensagem.papel === 'assistant' && mensagem.status === 'gerando',
-          )
-        if (gerando) {
-          inicioJobRef.current = Date.now()
-          setJobAtivo({ conversaId: id, respostaId: gerando.id })
+        const fluxo = fluxoRef.current
+        if (fluxo?.conversaId === id) {
+          setMensagens([
+            ...lista,
+            {
+              id: fluxo.mensagemAssistenteId,
+              conversa_id: id,
+              papel: 'assistant',
+              conteudo: fluxo.partes,
+              status: 'gerando',
+              criada_em: new Date().toISOString(),
+              fontes: fluxo.fontes,
+            },
+          ])
           mudarStatus('transmitindo')
         } else {
-          setJobAtivo(null)
-          mudarStatus('ocioso')
+          setMensagens(lista)
+          const gerando = [...lista]
+            .reverse()
+            .find(
+              (mensagem) =>
+                mensagem.papel === 'assistant' && mensagem.status === 'gerando',
+            )
+          mudarStatus(
+            fluxoRef.current || gerando ? 'transmitindo' : 'ocioso',
+          )
         }
       } catch (falha) {
         if (ehSessaoExpirada(falha)) {
@@ -126,17 +139,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   )
 
   // A URL é a fonte da verdade da conversa aberta; o provider sobrevive à
-  // troca de rota e o job continua no servidor.
+  // troca de rota e o stream continua mesmo quando a conversa sai da tela.
   useEffect(() => {
     const id = idDaRota(localizacao.pathname)
     if (id === conversaIdRef.current) return
 
-    setJobAtivo(null)
     conversaIdRef.current = id
     setConversaId(id)
     setErro(null)
     setTextoParaReenviar(null)
-    mudarStatus('ocioso')
+    const fluxo = fluxoRef.current
+    mudarStatus(fluxo ? 'transmitindo' : 'ocioso')
     if (id) {
       void carregarMensagens(id)
     } else {
@@ -152,110 +165,36 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // Ao voltar do segundo plano, consulta o job imediatamente.
-  useEffect(() => {
-    const aoVoltar = () => {
-      if (document.visibilityState === 'visible' && jobAtivo) {
-        setGatilhoPoll((valor) => valor + 1)
-      }
-    }
-    document.addEventListener('visibilitychange', aoVoltar)
-    return () => document.removeEventListener('visibilitychange', aoVoltar)
-  }, [jobAtivo])
-
-  // Polling: o servidor gera a resposta; aqui só acompanhamos o andamento.
-  useEffect(() => {
-    if (!jobAtivo) return
-    let cancelado = false
-    let temporizador: number | null = null
-    const { conversaId: idConversa, respostaId } = jobAtivo
-
-    if (statusRef.current !== 'transmitindo') mudarStatus('transmitindo')
-
-    const consultar = async () => {
-      try {
-        const resposta = await api.estadoChat(respostaId)
-        if (cancelado || !montadoRef.current) return
-        if (conversaIdRef.current !== idConversa) return
-
-        setMensagens((atuais) =>
-          atuais.map((mensagem) =>
-            mensagem.id === respostaId ? { ...mensagem, ...resposta } : mensagem,
-          ),
-        )
-
-        if (resposta.status === 'gerando') {
-          if (Date.now() - inicioJobRef.current > LIMITE_JOB_MS) {
-            setJobAtivo(null)
-            setErro('A resposta demorou demais. Tente de novo.')
-            setTextoParaReenviar(textoEnviadoRef.current || null)
-            mudarStatus('erro')
-            return
-          }
-          temporizador = window.setTimeout(() => {
-            void consultar()
-          }, INTERVALO_POLL_MS)
-          return
-        }
-
-        // Terminou: recarrega a conversa para alinhar ids, fontes e histórico.
-        const lista = await api.listarMensagens(idConversa)
-        if (cancelado || !montadoRef.current) return
-        if (conversaIdRef.current !== idConversa) return
-        setMensagens(lista)
-
-        setJobAtivo(null)
-        setTextoParaReenviar(null)
-        if (resposta.status === 'erro') {
-          const indice = lista.findIndex((mensagem) => mensagem.id === respostaId)
-          const anterior = indice > 0 ? lista[indice - 1] : null
-          setTextoParaReenviar(anterior?.papel === 'user' ? anterior.conteudo : null)
-          setErro('A Sera não conseguiu concluir. Tente de novo.')
-          mudarStatus('erro')
-        } else {
-          mudarStatus('ocioso')
-        }
-        void carregarConversas()
-      } catch (falha) {
-        if (cancelado || !montadoRef.current) return
-        if (ehSessaoExpirada(falha)) {
-          await sair()
-          return
-        }
-        setJobAtivo(null)
-        if (falha instanceof ErroApi && falha.status === 404) {
-          setErro('Não encontramos a resposta desta conversa.')
-        } else {
-          setErro(mensagemDoErro(falha))
-        }
-        setTextoParaReenviar(textoEnviadoRef.current || null)
-        mudarStatus('erro')
-      }
-    }
-
-    void consultar()
-    return () => {
-      cancelado = true
-      if (temporizador !== null) window.clearTimeout(temporizador)
-    }
-  }, [jobAtivo, gatilhoPoll, api, carregarConversas, mudarStatus, sair])
-
   const enviar = useCallback(
     async (bruto: string, opcoes?: { fonte?: 'jw' }) => {
-      if (enviandoRef.current || statusRef.current === 'transmitindo') {
+      if (
+        enviandoRef.current ||
+        fluxoRef.current ||
+        statusRef.current === 'transmitindo'
+      ) {
         return
       }
       const texto = normalizarMensagem(bruto)
       if (!texto) return
 
       enviandoRef.current = true
-      cancelarPedidoRef.current = false
       const fonte = opcoes?.fonte
       const idConversa = conversaIdRef.current
       const agora = new Date().toISOString()
       const idUsuario = idLocal()
       const idAssistente = idLocal()
       textoEnviadoRef.current = texto
+
+      const fluxo: FluxoAtivo = {
+        conversaId: idConversa,
+        mensagemUsuarioId: idUsuario,
+        mensagemAssistenteId: idAssistente,
+        partes: '',
+        fontes: [],
+        controller: new AbortController(),
+        motivoAborto: null,
+      }
+      fluxoRef.current = fluxo
 
       setMensagens((atuais) => [
         ...atuais,
@@ -280,63 +219,130 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setTextoParaReenviar(null)
       mudarStatus('enviando')
 
+      const limite = window.setTimeout(() => {
+        fluxo.motivoAborto = 'limite'
+        fluxo.controller.abort()
+      }, LIMITE_JOB_MS)
+
       try {
-        const trabalho = await api.iniciarChat({
-          mensagem: texto,
-          conversaId: idConversa ?? undefined,
-          fonte,
-        })
+        await api.transmitirChat(
+          { mensagem: texto, conversaId: idConversa ?? undefined, fonte },
+          (evento) => {
+            if (evento.tipo === 'start') {
+              fluxo.conversaId = evento.conversaId
+              fluxo.mensagemUsuarioId = evento.mensagemId
+              // Se o usuário trocou de conversa enquanto o POST voltava,
+              // não o puxa de volta: o stream continua em segundo plano.
+              if (conversaIdRef.current !== idConversa) return
+              conversaIdRef.current = evento.conversaId
+              setConversaId(evento.conversaId)
+              setMensagens((atuais) =>
+                atuais.map((mensagem) => {
+                  if (mensagem.id === idUsuario) {
+                    return {
+                      ...mensagem,
+                      id: evento.mensagemId,
+                      conversa_id: evento.conversaId,
+                    }
+                  }
+                  if (mensagem.id === idAssistente) {
+                    return { ...mensagem, conversa_id: evento.conversaId }
+                  }
+                  return mensagem
+                }),
+              )
+              if (idDaRota(window.location.pathname) !== evento.conversaId) {
+                navegar(`/c/${evento.conversaId}`, { replace: true })
+              }
+              if (!idConversa) {
+                void carregarConversas()
+              }
+              mudarStatus('transmitindo')
+              return
+            }
 
-        conversaIdRef.current = trabalho.conversa_id
-        setConversaId(trabalho.conversa_id)
-        setMensagens((atuais) =>
-          atuais.map((mensagem) => {
-            if (mensagem.id === idUsuario) {
-              return {
-                ...mensagem,
-                id: trabalho.mensagem_id,
-                conversa_id: trabalho.conversa_id,
+            if (evento.tipo === 'token') {
+              fluxo.partes += evento.texto
+              if (conversaIdRef.current === fluxo.conversaId) {
+                setMensagens((atuais) =>
+                  atuais.map((mensagem) =>
+                    mensagem.id === fluxo.mensagemAssistenteId
+                      ? { ...mensagem, conteudo: fluxo.partes }
+                      : mensagem,
+                  ),
+                )
               }
+              return
             }
-            if (mensagem.id === idAssistente) {
-              return {
-                ...mensagem,
-                id: trabalho.resposta_id,
-                conversa_id: trabalho.conversa_id,
+
+            if (evento.tipo === 'sources') {
+              fluxo.fontes = evento.fontes
+              if (conversaIdRef.current === fluxo.conversaId) {
+                setMensagens((atuais) =>
+                  atuais.map((mensagem) =>
+                    mensagem.id === fluxo.mensagemAssistenteId
+                      ? { ...mensagem, fontes: evento.fontes }
+                      : mensagem,
+                  ),
+                )
               }
+              return
             }
-            return mensagem
-          }),
+
+            if (evento.tipo === 'done') {
+              fluxo.mensagemAssistenteId = evento.mensagemId
+              fluxoRef.current = null
+              if (conversaIdRef.current === fluxo.conversaId) {
+                setMensagens((atuais) =>
+                  atuais.map((mensagem) =>
+                    mensagem.id === idAssistente
+                      ? {
+                          ...mensagem,
+                          id: evento.mensagemId,
+                          conteudo: fluxo.partes,
+                          status: 'completa',
+                        }
+                      : mensagem,
+                  ),
+                )
+                mudarStatus('ocioso')
+                void carregarMensagens(evento.conversaId)
+              }
+              void carregarConversas()
+              return
+            }
+
+            fluxo.motivoAborto = 'usuario'
+            fluxoRef.current = null
+            if (conversaIdRef.current === fluxo.conversaId) {
+              setMensagens((atuais) =>
+                atuais.map((mensagem) =>
+                  mensagem.id === idAssistente
+                    ? { ...mensagem, status: 'erro' }
+                    : mensagem,
+                ),
+              )
+              setErro(
+                evento.detalhe || 'A Sera não conseguiu concluir. Tente de novo.',
+              )
+              setTextoParaReenviar(texto)
+              mudarStatus('erro')
+            }
+          },
+          fluxo.controller.signal,
         )
-
-        if (idDaRota(window.location.pathname) !== trabalho.conversa_id) {
-          navegar(`/c/${trabalho.conversa_id}`, { replace: true })
-        }
-        if (!idConversa) {
-          void carregarConversas()
-        }
-
-        if (cancelarPedidoRef.current) {
-          cancelarPedidoRef.current = false
-          await api.cancelarChat(trabalho.resposta_id).catch(() => undefined)
-          if (!montadoRef.current) return
-          mudarStatus('ocioso')
-          void carregarMensagens(trabalho.conversa_id)
-          return
-        }
-
-        inicioJobRef.current = Date.now()
-        mudarStatus('transmitindo')
-        setJobAtivo({
-          conversaId: trabalho.conversa_id,
-          respostaId: trabalho.resposta_id,
-        })
       } catch (falha) {
+        if (fluxo.motivoAborto === 'usuario') return
         if (ehSessaoExpirada(falha)) {
           await sair()
           return
         }
         if (!montadoRef.current) return
+        if (fluxo.motivoAborto === 'limite') {
+          setErro('A resposta demorou demais. Tente de novo.')
+        } else {
+          setErro(mensagemDoErro(falha))
+        }
         setMensagens((atuais) =>
           atuais.map((mensagem) => {
             if (mensagem.id === idUsuario || mensagem.id === idAssistente) {
@@ -345,55 +351,63 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             return mensagem
           }),
         )
-        setErro(mensagemDoErro(falha))
         setTextoParaReenviar(texto)
         mudarStatus('erro')
       } finally {
+        window.clearTimeout(limite)
         enviandoRef.current = false
+        if (fluxoRef.current === fluxo) fluxoRef.current = null
       }
     },
-    [api, carregarConversas, carregarMensagens, mudarStatus, navegar, sair],
+    [
+      api,
+      carregarConversas,
+      carregarMensagens,
+      mudarStatus,
+      navegar,
+      sair,
+    ],
   )
 
   const parar = useCallback(() => {
-    if (enviandoRef.current && !jobAtivo) {
-      // O POST ainda não voltou: pede o cancelamento assim que o job existir.
-      cancelarPedidoRef.current = true
+    const fluxo = fluxoRef.current
+    if (!fluxo) {
       mudarStatus('ocioso')
       return
     }
-    const ativo = jobAtivo
-    setJobAtivo(null)
+    fluxo.motivoAborto = 'usuario'
+    fluxo.controller.abort()
+    fluxoRef.current = null
     setTextoParaReenviar(null)
     mudarStatus('ocioso')
-    if (!ativo) return
-    void api
-      .cancelarChat(ativo.respostaId)
-      .catch(() => undefined)
-      .finally(() => {
-        if (montadoRef.current && conversaIdRef.current === ativo.conversaId) {
-          void carregarMensagens(ativo.conversaId)
-        }
-      })
-  }, [api, carregarMensagens, jobAtivo, mudarStatus])
+    if (
+      montadoRef.current &&
+      fluxo.conversaId &&
+      conversaIdRef.current === fluxo.conversaId
+    ) {
+      void carregarMensagens(fluxo.conversaId)
+    }
+  }, [carregarMensagens, mudarStatus])
 
   const reenviar = useCallback(() => {
     if (!textoParaReenviar) return
     const texto = textoParaReenviar
     setTextoParaReenviar(null)
-    setMensagens((atuais) => atuais.filter((mensagem) => mensagem.status !== 'erro'))
+    setMensagens((atuais) =>
+      atuais.filter((mensagem) => mensagem.status !== 'erro'),
+    )
     setErro(null)
     void enviar(texto)
   }, [enviar, textoParaReenviar])
 
   const novaConversa = useCallback(() => {
-    setJobAtivo(null)
+    const fluxo = fluxoRef.current
     conversaIdRef.current = null
     setConversaId(null)
     setMensagens([])
     setErro(null)
     setTextoParaReenviar(null)
-    mudarStatus('ocioso')
+    mudarStatus(fluxo ? 'transmitindo' : 'ocioso')
     void aquecerApi(api)
     navegar('/')
   }, [api, mudarStatus, navegar])

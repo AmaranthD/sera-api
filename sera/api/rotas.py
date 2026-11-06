@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import sqlite3
 import time
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Annotated
@@ -600,22 +602,6 @@ async def chat(
         raise HTTPException(status_code=404, detail="pessoa não encontrada")
 
     modo_jw = _modo_jw(config, corpo.fonte)
-    if modo_jw:
-        aquecer_jw = getattr(
-            getattr(request.app.state, "jw", None), "aquecer", None
-        )
-        if callable(aquecer_jw):
-            try:
-                await aquecer_jw(limite=min(60.0, config.jw_timeout))
-            except JWIndisponivel as erro:
-                logger.warning("serviço JW não acordou: %s", erro.detalhe)
-                raise HTTPException(
-                    status_code=503,
-                    detail=(
-                        "o serviço JW não respondeu; tente de novo em "
-                        "alguns instantes"
-                    ),
-                ) from erro
 
     conversa = await _conversa_do_chat(
         banco, pessoa_id, corpo.conversa_id, corpo.mensagem
@@ -630,37 +616,60 @@ async def chat(
         conversa["id"], "user", corpo.mensagem
     )
 
-    momento = agora_do_fuso(config.fuso_horario)
-    system = await _montar_system(
-        personality, linha_pessoa, banco, config, corpo.mensagem, momento
-    )
-    busca, ferramentas, fontes, system = await _preparar_ferramentas(
-        request.app, config, corpo.mensagem, system, momento, modo_jw=modo_jw
-    )
-    contexto = ContextoFerramentas(
-        busca=busca,
-        jw=getattr(request.app.state, "jw", None),
-        banco=banco,
-        pessoa_id=pessoa_id,
-        mensagem_usuario=corpo.mensagem,
-        config=config,
-    )
-    system, esqueceu = await _aplicar_esquecimento(
-        config, corpo.mensagem, system, contexto
-    )
-    if esqueceu and ferramentas:
-        ferramentas = [
-            ferramenta
-            for ferramenta in ferramentas
-            if ferramenta["function"]["name"] != NOME_ESQUECER
-        ] or None
-    mensagens = [{"role": "system", "content": system}]
-    mensagens.extend(
-        {"role": linha["papel"], "content": linha["conteudo"]} for linha in historico
-    )
-    mensagens.append({"role": "user", "content": corpo.mensagem})
+    async def preparar():
+        if modo_jw:
+            aquecer_jw = getattr(
+                getattr(request.app.state, "jw", None), "aquecer", None
+            )
+            if callable(aquecer_jw):
+                try:
+                    await aquecer_jw(limite=min(60.0, config.jw_timeout))
+                except JWIndisponivel as erro:
+                    logger.warning(
+                        "serviço JW não acordou: %s", erro.detalhe
+                    )
+                    raise HTTPException(
+                        status_code=503,
+                        detail=(
+                            "o serviço JW não respondeu; tente de novo em "
+                            "alguns instantes"
+                        ),
+                    ) from erro
+
+        momento = agora_do_fuso(config.fuso_horario)
+        system = await _montar_system(
+            personality, linha_pessoa, banco, config, corpo.mensagem, momento
+        )
+        busca, ferramentas, fontes, system = await _preparar_ferramentas(
+            request.app, config, corpo.mensagem, system, momento, modo_jw=modo_jw
+        )
+        contexto = ContextoFerramentas(
+            busca=busca,
+            jw=getattr(request.app.state, "jw", None),
+            banco=banco,
+            pessoa_id=pessoa_id,
+            mensagem_usuario=corpo.mensagem,
+            config=config,
+        )
+        system, esqueceu = await _aplicar_esquecimento(
+            config, corpo.mensagem, system, contexto
+        )
+        if esqueceu and ferramentas:
+            ferramentas = [
+                ferramenta
+                for ferramenta in ferramentas
+                if ferramenta["function"]["name"] != NOME_ESQUECER
+            ] or None
+        mensagens = [{"role": "system", "content": system}]
+        mensagens.extend(
+            {"role": linha["papel"], "content": linha["conteudo"]}
+            for linha in historico
+        )
+        mensagens.append({"role": "user", "content": corpo.mensagem})
+        return mensagens, contexto, ferramentas, fontes, momento
 
     if not corpo.stream:
+        mensagens, contexto, ferramentas, _, momento = await preparar()
         return await _resposta_unica(
             banco,
             llm,
@@ -680,11 +689,7 @@ async def chat(
         config,
         conversa["id"],
         mensagem_usuario["id"],
-        mensagens,
-        contexto=contexto,
-        ferramentas=ferramentas,
-        fontes=fontes,
-        momento=momento,
+        preparar,
         uma_fonte=modo_jw,
     )
 
@@ -751,6 +756,7 @@ async def chat_job(
                 config,
                 linha_pessoa,
                 conversa["id"],
+                mensagem_usuario["id"],
                 corpo.mensagem,
                 resposta["id"],
                 modo_jw,
@@ -881,6 +887,7 @@ async def _rodar_job(
     config: Config,
     linha_pessoa: dict,
     conversa_id: str,
+    mensagem_usuario_id: str,
     texto: str,
     resposta_id: str,
     modo_jw: bool,
@@ -904,6 +911,13 @@ async def _rodar_job(
         historico = await banco.ultimas_mensagens(
             conversa_id, config.max_history_mensagens
         )
+        # A mensagem atual já foi persistida antes do job começar; ela entra
+        # no prompt uma única vez, no final.
+        historico = [
+            linha
+            for linha in historico
+            if linha.get("id") != mensagem_usuario_id
+        ]
         _cortar_historico(historico, config.max_history_chars)
 
         momento = agora_do_fuso(config.fuso_horario)
@@ -1029,6 +1043,46 @@ async def _rodar_job(
                 await fechar()
 
 
+_RE_AGENDA = re.compile(
+    r"\b(agend|desmarc|marcar|compromiss|reuniao|consulta|evento|"
+    r"aniversari|lembrete|me lembr|amanha|semana|proxim[ao]|"
+    r"dia \d|\d{1,2}[h:]|\d{1,2}/\d{1,2})"
+)
+_RE_TEXTO_DIARIO = re.compile(
+    r"(texto di[áa]rio|texto de hoje|receber.*texto|todo dia|"
+    r"diariamente|hor[áa]rio.*texto|desativar.*texto|ativar.*texto)"
+)
+_RE_JW = re.compile(
+    r"\b(biblia|biblico|versiculo|capitulo|jeova|jesus|cristo|"
+    r"evangelho|salmo|proverbios|genesis|exodo|mateus|marcos|lucas|"
+    r"joao|atos|romanos|corintios|galatas|efesios|filipenses|"
+    r"colossenses|tessalonicenses|timoteo|tito|hebreus|tiago|pedro|"
+    r"judas|apocalipse|isaias|jeremias|ezequiel|daniel|livro de)"
+    r"|\d+:\d+"
+)
+
+
+def _sem_acento(texto: str) -> str:
+    decomposto = unicodedata.normalize("NFKD", texto.lower())
+    return "".join(
+        caractere
+        for caractere in decomposto
+        if not unicodedata.combining(caractere)
+    )
+
+
+def _tem_indicador_agenda(mensagem: str) -> bool:
+    return _RE_AGENDA.search(_sem_acento(mensagem)) is not None
+
+
+def _tem_indicador_texto_diario(mensagem: str) -> bool:
+    return _RE_TEXTO_DIARIO.search(_sem_acento(mensagem)) is not None
+
+
+def _tem_indicador_jw(mensagem: str) -> bool:
+    return _RE_JW.search(_sem_acento(mensagem)) is not None
+
+
 async def _preparar_ferramentas(
     app: FastAPI,
     config: Config,
@@ -1051,9 +1105,17 @@ async def _preparar_ferramentas(
     # O cliente Gemini desta camada ainda não executa tool calling.
     tool_calling = config.llm_provider == "openai"
     aprendizado = config.aprendizado_habilitado and tool_calling
-    agenda = tool_calling and not modo_jw
-    jw = config.jw_ativa and tool_calling
-    texto_diario = tool_calling
+    # Ferramentas que não fazem parte do assunto da mensagem só aumentam o
+    # prompt e o tempo de deliberação do modelo.
+    agenda = (
+        tool_calling and not modo_jw and _tem_indicador_agenda(mensagem)
+    )
+    jw = (
+        config.jw_ativa
+        and tool_calling
+        and (modo_jw or _tem_indicador_jw(mensagem))
+    )
+    texto_diario = tool_calling and _tem_indicador_texto_diario(mensagem)
     ferramentas = esquemas(
         busca=busca is not None and tool_calling,
         aprendizado=aprendizado,
@@ -1204,6 +1266,12 @@ async def _montar_system(
         faixa_etaria=FaixaEtaria(linha_pessoa["faixa_etaria"]),
         perfil=Perfil(linha_pessoa["perfil"]),
     )
+    linhas_ajustes, linhas_memorias, linhas_temas, trechos = await asyncio.gather(
+        banco.listar_ajustes(linha_pessoa["id"]),
+        banco.listar_memorias(linha_pessoa["id"]),
+        banco.listar_temas(linha_pessoa["id"]),
+        _buscar_contexto(banco, linha_pessoa, config, mensagem),
+    )
     ajustes = [
         AjusteAprendido(
             tipo=TipoAjuste(linha["tipo"]),
@@ -1212,7 +1280,7 @@ async def _montar_system(
             origem=OrigemAjuste(linha["origem"]),
             criado_em=_data(linha["criada_em"]),
         )
-        for linha in await banco.listar_ajustes(linha_pessoa["id"])
+        for linha in linhas_ajustes
     ]
     memoria = MemoriaDaPessoa(
         fatos=tuple(
@@ -1221,11 +1289,10 @@ async def _montar_system(
                 CategoriaFato(linha["categoria"]),
                 _data(linha["criada_em"]),
             )
-            for linha in await banco.listar_memorias(linha_pessoa["id"])
+            for linha in linhas_memorias
         ),
-        nao_mencionar=tuple(await banco.listar_temas(linha_pessoa["id"])),
+        nao_mencionar=tuple(linhas_temas),
     )
-    trechos = await _buscar_contexto(banco, linha_pessoa, config, mensagem)
     base = montar(
         personality,
         pessoa,
@@ -1666,41 +1733,15 @@ async def _resposta_stream(
     config: Config,
     conversa_id: str,
     mensagem_usuario_id: str,
-    mensagens: list[dict],
+    preparar,
     *,
-    contexto: ContextoFerramentas | None = None,
-    ferramentas: list[dict] | None = None,
-    fontes: list[dict] | None = None,
-    momento: datetime | None = None,
     uma_fonte: bool = False,
 ) -> StreamingResponse:
-    contexto = contexto or ContextoFerramentas()
-    fluxo = _fluxo_com_ferramentas(
-        llm,
-        mensagens,
-        config,
-        contexto,
-        ferramentas,
-        momento,
-        uma_fonte=uma_fonte,
-    )
-    try:
-        primeiro = await anext(fluxo)
-    except StopAsyncIteration:
-        primeiro = None
-    except ErroDoProvedor as erro:
-        logger.warning("provedor falhou antes do stream: %s", erro.detalhe)
-        raise HTTPException(
-            status_code=502, detail=f"provedor falhou: {erro.detalhe}"
-        ) from erro
-
-    fontes_iniciais = list(fontes or [])
-    if uma_fonte:
-        fontes_iniciais = fontes_iniciais[:1]
-
     async def gerar():
         partes: list[str] = []
         uso: Uso | None = None
+        # Envia o `start` antes de qualquer ida ao banco ou ao provedor para
+        # o app já mostrar "digitando" e medir o atraso real do modelo.
         yield _sse(
             "start",
             {
@@ -1708,10 +1749,24 @@ async def _resposta_stream(
                 "mensagem_id": mensagem_usuario_id,
             },
         )
-        if fontes_iniciais:
-            yield _sse("sources", {"fontes": fontes_iniciais})
         try:
-            async for evento in _encadear(primeiro, fluxo):
+            mensagens, contexto, ferramentas, fontes, momento = await preparar()
+            fontes_iniciais = list(fontes or [])
+            if uma_fonte:
+                fontes_iniciais = fontes_iniciais[:1]
+            if fontes_iniciais:
+                yield _sse("sources", {"fontes": fontes_iniciais})
+
+            fluxo = _fluxo_com_ferramentas(
+                llm,
+                mensagens,
+                config,
+                contexto,
+                ferramentas,
+                momento,
+                uma_fonte=uma_fonte,
+            )
+            async for evento in fluxo:
                 if isinstance(evento, Delta):
                     partes.append(evento.texto)
                     yield _sse("token", {"texto": evento.texto})
@@ -1754,8 +1809,13 @@ async def _resposta_stream(
                         conversa_id, "assistant", "".join(partes), "interrompida"
                     )
             raise
+        except HTTPException as erro:
+            yield _sse(
+                "error",
+                {"codigo": "indisponivel", "detalhe": str(erro.detail)},
+            )
         except ErroDoProvedor as erro:
-            logger.warning("provedor falhou no meio do stream: %s", erro.detalhe)
+            logger.warning("provedor falhou no stream: %s", erro.detalhe)
             if partes:
                 await banco.criar_mensagem(
                     conversa_id, "assistant", "".join(partes), "erro"
@@ -1779,13 +1839,6 @@ async def _resposta_stream(
             "X-Accel-Buffering": "no",
         },
     )
-
-
-async def _encadear(primeiro, fluxo):
-    if primeiro is not None:
-        yield primeiro
-    async for evento in fluxo:
-        yield evento
 
 
 def _cortar_historico(historico: list[dict], limite: int) -> None:

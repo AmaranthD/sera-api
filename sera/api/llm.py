@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Mapping, Protocol, Sequence
 
@@ -8,6 +9,8 @@ import anyio
 import httpx
 
 from .config import Config
+
+logger = logging.getLogger(__name__)
 
 try:
     from google.genai import errors as _gemini_errors
@@ -188,6 +191,17 @@ class ClienteOpenAICompat:
     ) -> None:
         self._config = config
         self._transporte = transporte
+        self._cliente: httpx.AsyncClient | None = None
+
+    def _obter_cliente(self) -> httpx.AsyncClient:
+        if self._cliente is None:
+            self._cliente = httpx.AsyncClient(transport=self._transporte)
+        return self._cliente
+
+    async def fechar(self) -> None:
+        if self._cliente is not None:
+            await self._cliente.aclose()
+            self._cliente = None
 
     async def stream(
         self,
@@ -269,91 +283,89 @@ class ClienteOpenAICompat:
         uso: Uso | None = None
 
         try:
-            async with httpx.AsyncClient(
-                timeout=timeout, transport=self._transporte
-            ) as cliente:
-                async with cliente.stream(
-                    "POST", url, json=payload, headers=cabecalhos
-                ) as resposta:
-                    if resposta.status_code >= 400:
-                        corpo = (await resposta.aread()).decode("utf-8", "replace")
-                        codigo = "http"
-                        if resposta.status_code == 400:
-                            if "stream_options" in corpo:
-                                codigo = "stream_options"
-                            elif ferramentas and "tool" in corpo.lower():
-                                codigo = "ferramentas"
-                        raise ErroDoProvedor(
-                            f"provedor respondeu {resposta.status_code}: "
-                            f"{corpo[:300]}",
-                            status=resposta.status_code,
-                            retentavel=(
-                                resposta.status_code == 429
-                                or resposta.status_code >= 500
-                            ),
-                            codigo=codigo,
-                        )
+            cliente = self._obter_cliente()
+            async with cliente.stream(
+                "POST", url, json=payload, headers=cabecalhos, timeout=timeout
+            ) as resposta:
+                if resposta.status_code >= 400:
+                    corpo = (await resposta.aread()).decode("utf-8", "replace")
+                    codigo = "http"
+                    if resposta.status_code == 400:
+                        if "stream_options" in corpo:
+                            codigo = "stream_options"
+                        elif ferramentas and "tool" in corpo.lower():
+                            codigo = "ferramentas"
+                    raise ErroDoProvedor(
+                        f"provedor respondeu {resposta.status_code}: "
+                        f"{corpo[:300]}",
+                        status=resposta.status_code,
+                        retentavel=(
+                            resposta.status_code == 429
+                            or resposta.status_code >= 500
+                        ),
+                        codigo=codigo,
+                    )
 
-                    tipo = resposta.headers.get("content-type", "").lower()
-                    if "application/json" in tipo or tipo.endswith("+json"):
-                        corpo = (await resposta.aread()).decode("utf-8", "replace")
-                        try:
-                            bruto = json.loads(corpo)
-                        except json.JSONDecodeError as erro:
-                            raise ErroDoProvedor(
-                                "resposta não é SSE nem JSON válido: "
-                                f"{corpo[:300]}",
-                                codigo="formato",
-                            ) from erro
-                        if not isinstance(bruto, Mapping):
-                            raise ErroDoProvedor(
-                                "resposta JSON inesperada do provedor",
-                                codigo="formato",
-                            )
-                        if bruto.get("error"):
-                            raise ErroDoProvedor(
-                                "provedor retornou erro: "
-                                f"{_mensagem_de_erro(bruto['error'])}",
-                                codigo="provedor",
-                            )
-                        texto = _texto_da_resposta(bruto)
+                tipo = resposta.headers.get("content-type", "").lower()
+                if "application/json" in tipo or tipo.endswith("+json"):
+                    corpo = (await resposta.aread()).decode("utf-8", "replace")
+                    try:
+                        bruto = json.loads(corpo)
+                    except json.JSONDecodeError as erro:
+                        raise ErroDoProvedor(
+                            "resposta não é SSE nem JSON válido: "
+                            f"{corpo[:300]}",
+                            codigo="formato",
+                        ) from erro
+                    if not isinstance(bruto, Mapping):
+                        raise ErroDoProvedor(
+                            "resposta JSON inesperada do provedor",
+                            codigo="formato",
+                        )
+                    if bruto.get("error"):
+                        raise ErroDoProvedor(
+                            "provedor retornou erro: "
+                            f"{_mensagem_de_erro(bruto['error'])}",
+                            codigo="provedor",
+                        )
+                    texto = _texto_da_resposta(bruto)
+                    if texto:
+                        yield Delta(texto)
+                    chamadas = _chamadas_da_resposta(bruto)
+                    if chamadas:
+                        yield Ferramenta(tuple(chamadas))
+                    bruto_uso = bruto.get("usage")
+                    yield Fim(_uso_de(bruto_uso) if bruto_uso else None)
+                    return
+
+                acumuladas: dict[int, dict] = {}
+                async for linha in resposta.aiter_lines():
+                    if not linha.startswith("data:"):
+                        continue
+                    dado = linha[5:].strip()
+                    if not dado or dado == "[DONE]":
+                        continue
+                    try:
+                        evento = json.loads(dado)
+                    except json.JSONDecodeError:
+                        continue
+
+                    if evento.get("error"):
+                        raise ErroDoProvedor(
+                            f"provedor retornou erro: "
+                            f"{_mensagem_de_erro(evento['error'])}",
+                            codigo="provedor",
+                        )
+                    if evento.get("usage"):
+                        uso = _uso_de(evento["usage"])
+
+                    for escolha in evento.get("choices") or []:
+                        delta = escolha.get("delta") or {}
+                        texto = delta.get("content")
                         if texto:
                             yield Delta(texto)
-                        chamadas = _chamadas_da_resposta(bruto)
-                        if chamadas:
-                            yield Ferramenta(tuple(chamadas))
-                        bruto_uso = bruto.get("usage")
-                        yield Fim(_uso_de(bruto_uso) if bruto_uso else None)
-                        return
-
-                    acumuladas: dict[int, dict] = {}
-                    async for linha in resposta.aiter_lines():
-                        if not linha.startswith("data:"):
-                            continue
-                        dado = linha[5:].strip()
-                        if not dado or dado == "[DONE]":
-                            continue
-                        try:
-                            evento = json.loads(dado)
-                        except json.JSONDecodeError:
-                            continue
-
-                        if evento.get("error"):
-                            raise ErroDoProvedor(
-                                f"provedor retornou erro: "
-                                f"{_mensagem_de_erro(evento['error'])}",
-                                codigo="provedor",
-                            )
-                        if evento.get("usage"):
-                            uso = _uso_de(evento["usage"])
-
-                        for escolha in evento.get("choices") or []:
-                            delta = escolha.get("delta") or {}
-                            texto = delta.get("content")
-                            if texto:
-                                yield Delta(texto)
-                            for bruto_chamada in delta.get("tool_calls") or []:
-                                _acumular_chamada(acumuladas, bruto_chamada)
+                        for bruto_chamada in delta.get("tool_calls") or []:
+                            _acumular_chamada(acumuladas, bruto_chamada)
         except httpx.TimeoutException as erro:
             raise ErroDoProvedor(
                 f"timeout ao falar com o provedor: {erro}",
@@ -371,6 +383,63 @@ class ClienteOpenAICompat:
         if chamadas:
             yield Ferramenta(tuple(chamadas))
         yield Fim(uso)
+
+
+class ClienteComFallback:
+    """Usa o provedor principal e cai para a reserva quando ele falha.
+
+    A troca só acontece antes do primeiro token/ferramenta: depois disso a
+    resposta já começou a chegar ao cliente e repetir o texto duplicaria a
+    saída.
+    """
+
+    def __init__(self, primario: ClienteLLM, reserva: ClienteLLM) -> None:
+        self._primario = primario
+        self._reserva = reserva
+
+    async def stream(
+        self,
+        mensagens: Sequence[Mapping[str, Any]],
+        *,
+        temperatura: float,
+        max_tokens: int,
+        ferramentas: Sequence[Mapping[str, Any]] | None = None,
+        escolha_ferramenta: str | None = None,
+    ) -> AsyncIterator[Evento]:
+        emitido = False
+        try:
+            async for evento in self._primario.stream(
+                mensagens,
+                temperatura=temperatura,
+                max_tokens=max_tokens,
+                ferramentas=ferramentas,
+                escolha_ferramenta=escolha_ferramenta,
+            ):
+                emitido = True
+                yield evento
+            return
+        except ErroDoProvedor as erro:
+            if emitido:
+                raise
+            logger.warning(
+                "provedor principal falhou antes do primeiro token (%s); "
+                "usando fallback",
+                erro,
+            )
+        async for evento in self._reserva.stream(
+            mensagens,
+            temperatura=temperatura,
+            max_tokens=max_tokens,
+            ferramentas=ferramentas,
+            escolha_ferramenta=escolha_ferramenta,
+        ):
+            yield evento
+
+    async def fechar(self) -> None:
+        for cliente in (self._primario, self._reserva):
+            fechar = getattr(cliente, "fechar", None)
+            if fechar is not None:
+                await fechar()
 
 
 def _mensagem_para_payload(mensagem: Mapping[str, Any]) -> dict:

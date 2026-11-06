@@ -5,6 +5,7 @@ import pytest
 
 from sera.api.config import Config
 from sera.api.llm import (
+    ClienteComFallback,
     ClienteOpenAICompat,
     Delta,
     ErroDoProvedor,
@@ -318,3 +319,105 @@ async def test_envia_tool_choice_quando_pedido():
 
     assert corpos[0]["tools"] == [ferramenta]
     assert corpos[0]["tool_choice"] == "none"
+
+
+class _ClienteRoteiro:
+    def __init__(self, eventos=(), erro: Exception | None = None) -> None:
+        self.eventos = list(eventos)
+        self.erro = erro
+        self.chamadas = 0
+        self.fechado = False
+
+    async def stream(
+        self,
+        mensagens,
+        *,
+        temperatura,
+        max_tokens,
+        ferramentas=None,
+        escolha_ferramenta=None,
+    ):
+        self.chamadas += 1
+        for evento in self.eventos:
+            yield evento
+        if self.erro is not None:
+            raise self.erro
+
+    async def fechar(self) -> None:
+        self.fechado = True
+
+
+async def _coletar_roteiro(cliente):
+    return [
+        evento
+        async for evento in cliente.stream(
+            [{"role": "user", "content": "oi"}],
+            temperatura=0.5,
+            max_tokens=8,
+        )
+    ]
+
+
+async def test_fallback_assume_quando_principal_falha_antes_do_token():
+    primario = _ClienteRoteiro(erro=ErroDoProvedor("fora do ar", status=503))
+    reserva = _ClienteRoteiro(eventos=[Delta("reserva"), Fim()])
+    cliente = ClienteComFallback(primario, reserva)
+
+    eventos = await _coletar_roteiro(cliente)
+
+    assert [e.texto for e in eventos if isinstance(e, Delta)] == ["reserva"]
+    assert primario.chamadas == 1
+    assert reserva.chamadas == 1
+
+
+async def test_fallback_nao_duplica_texto_se_principal_ja_emitiu():
+    primario = _ClienteRoteiro(
+        eventos=[Delta("parcial")],
+        erro=ErroDoProvedor("caiu no meio"),
+    )
+    reserva = _ClienteRoteiro(eventos=[Delta("reserva"), Fim()])
+    cliente = ClienteComFallback(primario, reserva)
+
+    with pytest.raises(ErroDoProvedor):
+        await _coletar_roteiro(cliente)
+
+    assert reserva.chamadas == 0
+
+
+async def test_fallback_nao_e_usado_quando_principal_termina():
+    primario = _ClienteRoteiro(eventos=[Delta("ok"), Fim()])
+    reserva = _ClienteRoteiro(eventos=[Delta("reserva"), Fim()])
+    cliente = ClienteComFallback(primario, reserva)
+
+    eventos = await _coletar_roteiro(cliente)
+
+    assert [e.texto for e in eventos if isinstance(e, Delta)] == ["ok"]
+    assert reserva.chamadas == 0
+
+
+async def test_fallback_fecha_os_dois_clientes():
+    primario = _ClienteRoteiro()
+    reserva = _ClienteRoteiro()
+    cliente = ClienteComFallback(primario, reserva)
+
+    await cliente.fechar()
+
+    assert primario.fechado is True
+    assert reserva.fechado is True
+
+
+def test_fallback_exige_base_e_modelo():
+    with pytest.raises(ValueError, match="LLM_FALLBACK_BASE_URL"):
+        Config(llm_fallback_model="minimax")
+
+
+def test_url_chat_do_fallback():
+    config = Config(
+        llm_fallback_base_url="https://host/v1beta/openai/",
+        llm_fallback_model="gemini-flash-latest",
+    )
+    assert config.fallback_ativa is True
+    assert (
+        config.url_chat_fallback
+        == "https://host/v1beta/openai/chat/completions"
+    )

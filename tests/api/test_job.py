@@ -49,6 +49,18 @@ async def test_job_devolve_ids_e_completa_a_resposta(cliente, fake):
     assert mensagem["fontes"] == []
 
 
+async def test_job_nao_duplica_mensagem_do_usuario(cliente, fake):
+    await criar_pessoa(cliente)
+    inicio = await cliente.post(
+        "/chat/job", json={"pessoa_id": "maria", "mensagem": "Oi, Sera"}
+    )
+    trabalho = inicio.json()
+    await _aguardar(cliente, trabalho["conversa_id"], trabalho["resposta_id"])
+
+    usuarios = [item for item in fake.mensagens if item["role"] == "user"]
+    assert [item["content"] for item in usuarios] == ["Oi, Sera"]
+
+
 async def test_job_persiste_fontes_da_busca(config, fake):
     from sera.api import Config
     from sera.api.busca import ResultadoBusca

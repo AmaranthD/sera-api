@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager, suppress
+from dataclasses import replace
 from typing import Callable
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
 
 from ..prompt import carregar_personality
 from .agenda import laco_lembretes
@@ -18,7 +20,12 @@ from .db import Banco
 from .db_supabase import BancoSupabase
 from .jobs import GerenciadorJobs
 from .jw import ClienteJW
-from .llm import ClienteGemini, ClienteLLM, ClienteOpenAICompat
+from .llm import (
+    ClienteComFallback,
+    ClienteGemini,
+    ClienteLLM,
+    ClienteOpenAICompat,
+)
 from .rotas import router
 from .tts import router as router_tts
 from .webpush import validar_chaves
@@ -46,11 +53,15 @@ def criar_app(
 
     fabrica: FabricaBanco | None = None
     banco_local: Banco | None = None
+    transporte_supabase: httpx.AsyncBaseTransport | None = None
     if banco is not None:
         banco_local = banco
         banco_local.iniciar()
     elif config.supabase_url and config.supabase_anon_key:
-        fabrica = lambda token: BancoSupabase(config, token or "")
+        transporte_supabase = httpx.AsyncHTTPTransport()
+        fabrica = lambda token: BancoSupabase(
+            config, token or "", transporte=transporte_supabase
+        )
     else:
         banco_local = Banco(config.db_path)
         banco_local.iniciar()
@@ -73,6 +84,11 @@ def criar_app(
             fechar = getattr(admin, "fechar", None)
             if fechar is not None:
                 await fechar()
+        fechar_llm = getattr(app.state.llm, "fechar", None)
+        if fechar_llm is not None:
+            await fechar_llm()
+        if transporte_supabase is not None:
+            await transporte_supabase.aclose()
 
     app = FastAPI(title="Sera", version="0.3.0", lifespan=ciclo)
 
@@ -88,7 +104,7 @@ def criar_app(
     app.state.banco_fabrica = fabrica
     if fabrica is not None and config.supabase_service_key:
         app.state.banco_admin = BancoSupabase(
-            config, config.supabase_service_key
+            config, config.supabase_service_key, transporte=transporte_supabase
         )
     else:
         app.state.banco_admin = banco_local
@@ -118,6 +134,12 @@ def criar_app(
         logger.warning(
             "SERA_EMAILS não definido: qualquer conta autenticada pode usar "
             "a API; feche o cadastro no Supabase ou defina a lista"
+        )
+    if config.fallback_ativa:
+        logger.info(
+            "fallback LLM ativo: modelo=%s base=%s",
+            config.llm_fallback_model,
+            config.llm_fallback_base_url,
         )
     if config.llm_provider == "openai" and config.base_incompleta:
         logger.warning(
@@ -171,5 +193,18 @@ def criar_app(
 
 def _criar_llm(config: Config) -> ClienteLLM:
     if config.llm_provider == "gemini":
-        return ClienteGemini(config)
-    return ClienteOpenAICompat(config)
+        primario: ClienteLLM = ClienteGemini(config)
+    else:
+        primario = ClienteOpenAICompat(config)
+    if not config.fallback_ativa:
+        return primario
+    reserva_config = replace(
+        config,
+        llm_base_url=(config.llm_fallback_base_url or "").strip().rstrip("/"),
+        llm_api_key=config.llm_fallback_api_key,
+        llm_model=config.llm_fallback_model or "",
+        llm_fallback_base_url=None,
+        llm_fallback_api_key=None,
+        llm_fallback_model=None,
+    )
+    return ClienteComFallback(primario, ClienteOpenAICompat(reserva_config))

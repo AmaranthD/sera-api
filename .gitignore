@@ -9,3 +9,4 @@ data/
 skills-lock.json
 dist/
 build/
+.opencode/

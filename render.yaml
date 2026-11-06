@@ -17,11 +17,19 @@ services:
         value: authenticated
       - key: LLM_PROVIDER
         value: openai
+      # Endpoint OpenAI-compatível do Gemini: mantém tools (busca, agenda,
+      # memória) funcionando com o mesmo cliente do provedor anterior.
       - key: LLM_BASE_URL
-        value: https://integrate.api.nvidia.com/v1
+        value: https://generativelanguage.googleapis.com/v1beta/openai
       - key: LLM_MODEL
-        value: minimaxai/minimax-m3.1-flash
+        value: gemini-flash-latest
       - key: LLM_API_KEY
+        sync: false
+      - key: LLM_FALLBACK_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
+      - key: LLM_FALLBACK_MODEL
+        value: minimaxai/minimax-m3.1-flash
+      - key: LLM_FALLBACK_API_KEY
         sync: false
       - key: LLM_TEMPERATURE
         value: "0.8"
