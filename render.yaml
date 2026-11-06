@@ -22,15 +22,23 @@ services:
       - key: LLM_BASE_URL
         value: https://generativelanguage.googleapis.com/v1beta/openai
       - key: LLM_MODEL
-        value: gemini-flash-latest
+        value: gemini-3.5-flash
       - key: LLM_API_KEY
         sync: false
+      # Se o Gemini não responder rápido, cai no fallback em vez de esperar
+      # o padrão de 120 s. O fallback mantém um prazo maior (abaixo).
+      - key: LLM_CONNECT_TIMEOUT
+        value: "5"
+      - key: LLM_READ_TIMEOUT
+        value: "15"
       - key: LLM_FALLBACK_BASE_URL
         value: https://integrate.api.nvidia.com/v1
       - key: LLM_FALLBACK_MODEL
         value: minimaxai/minimax-m3.1-flash
       - key: LLM_FALLBACK_API_KEY
         sync: false
+      - key: LLM_FALLBACK_READ_TIMEOUT
+        value: "120"
       - key: LLM_TEMPERATURE
         value: "0.8"
       - key: LLM_MAX_TOKENS

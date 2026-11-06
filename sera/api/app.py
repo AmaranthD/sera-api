@@ -213,5 +213,7 @@ def _criar_llm(config: Config) -> ClienteLLM:
         llm_fallback_base_url=None,
         llm_fallback_api_key=None,
         llm_fallback_model=None,
+        read_timeout=config.llm_fallback_read_timeout,
+        connect_timeout=max(config.connect_timeout, 10.0),
     )
     return ClienteComFallback(primario, ClienteOpenAICompat(reserva_config))

@@ -923,6 +923,8 @@ async def _rodar_job(
     fechar_banco: bool,
 ) -> None:
     """Gera e persiste a resposta sem depender do request que a criou."""
+    inicio = time.monotonic()
+    primeiro_token: float | None = None
     partes: list[str] = []
     fontes: list[dict] = []
     ultimo_salvo = 0.0
@@ -1005,6 +1007,8 @@ async def _rodar_job(
             uma_fonte=modo_jw,
         ):
             if isinstance(evento, Delta):
+                if primeiro_token is None:
+                    primeiro_token = time.monotonic() - inicio
                 partes.append(evento.texto)
             elif isinstance(evento, Fontes):
                 for fonte in evento.fontes:
@@ -1033,9 +1037,16 @@ async def _rodar_job(
             resposta,
         )
         logger.info(
-            "job de chat concluído: resposta=%s modelo=%s",
+            "job de chat concluído: resposta=%s modelo=%s primeiro_token=%s "
+            "total=%.2fs",
             resposta_id,
             modelo,
+            (
+                f"{primeiro_token:.2f}s"
+                if primeiro_token is not None
+                else "sem token"
+            ),
+            time.monotonic() - inicio,
         )
         DIAGNOSTICO.sucesso(modelo)
     except asyncio.CancelledError:
@@ -1368,6 +1379,8 @@ async def _resposta_unica(
     uma_fonte: bool = False,
 ) -> dict:
     contexto = contexto or ContextoFerramentas()
+    inicio = time.monotonic()
+    primeiro_token: float | None = None
     partes: list[str] = []
     uso: Uso | None = None
     modelo = config.llm_model
@@ -1382,6 +1395,8 @@ async def _resposta_unica(
             uma_fonte=uma_fonte,
         ):
             if isinstance(evento, Delta):
+                if primeiro_token is None:
+                    primeiro_token = time.monotonic() - inicio
                 partes.append(evento.texto)
             elif isinstance(evento, Fim):
                 uso = _somar_uso(uso, evento.uso)
@@ -1396,7 +1411,18 @@ async def _resposta_unica(
     texto = "".join(partes)
     mensagem = await banco.criar_mensagem(conversa_id, "assistant", texto)
     DIAGNOSTICO.sucesso(modelo)
-    logger.info("chat concluído: conversa=%s modelo=%s", conversa_id, modelo)
+    logger.info(
+        "chat concluído (sem stream): conversa=%s modelo=%s primeiro_token=%s "
+        "total=%.2fs",
+        conversa_id,
+        modelo,
+        (
+            f"{primeiro_token:.2f}s"
+            if primeiro_token is not None
+            else "sem token"
+        ),
+        time.monotonic() - inicio,
+    )
     return {
         "conversa_id": conversa_id,
         "mensagem_id": mensagem["id"],
@@ -1782,6 +1808,8 @@ async def _resposta_stream(
     uma_fonte: bool = False,
 ) -> StreamingResponse:
     async def gerar():
+        inicio = time.monotonic()
+        primeiro_token: float | None = None
         partes: list[str] = []
         uso: Uso | None = None
         modelo = config.llm_model
@@ -1813,6 +1841,8 @@ async def _resposta_stream(
             )
             async for evento in fluxo:
                 if isinstance(evento, Delta):
+                    if primeiro_token is None:
+                        primeiro_token = time.monotonic() - inicio
                     partes.append(evento.texto)
                     yield _sse("token", {"texto": evento.texto})
                 elif isinstance(evento, Fim):
@@ -1841,9 +1871,16 @@ async def _resposta_stream(
             )
             DIAGNOSTICO.sucesso(modelo)
             logger.info(
-                "chat concluído: conversa=%s modelo=%s",
+                "chat concluído: conversa=%s modelo=%s primeiro_token=%s "
+                "total=%.2fs",
                 conversa_id,
                 modelo,
+                (
+                    f"{primeiro_token:.2f}s"
+                    if primeiro_token is not None
+                    else "sem token"
+                ),
+                time.monotonic() - inicio,
             )
             yield _sse(
                 "done",

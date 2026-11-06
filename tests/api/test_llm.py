@@ -183,6 +183,24 @@ async def test_erro_http_nao_retentavel_vira_erro_do_provedor():
     assert capturado.value.retentavel is False
 
 
+async def test_timeout_de_leitura_nao_retenta():
+    chamadas = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal chamadas
+        chamadas += 1
+        raise httpx.ReadTimeout("sem resposta")
+
+    cliente = ClienteOpenAICompat(
+        _config(), transporte=httpx.MockTransport(handler)
+    )
+    with pytest.raises(ErroDoProvedor) as capturado:
+        await _coletar(cliente)
+
+    assert capturado.value.codigo == "timeout"
+    assert chamadas == 1
+
+
 async def test_parseia_tool_calls_fragmentados():
     def linha(dados: dict) -> str:
         return f"data: {json.dumps(dados, ensure_ascii=False)}\n\n"
@@ -421,3 +439,29 @@ def test_url_chat_do_fallback():
         config.url_chat_fallback
         == "https://host/v1beta/openai/chat/completions"
     )
+
+
+def test_timeouts_do_principal_e_do_fallback_vem_do_env():
+    config = Config.de_env(
+        {
+            "SERA_DEV": "1",
+            "LLM_CONNECT_TIMEOUT": "5",
+            "LLM_READ_TIMEOUT": "15",
+            "LLM_FALLBACK_BASE_URL": "https://host/v1beta/openai",
+            "LLM_FALLBACK_MODEL": "minimax",
+            "LLM_FALLBACK_READ_TIMEOUT": "90",
+        }
+    )
+
+    assert config.connect_timeout == 5
+    assert config.read_timeout == 15
+    assert config.llm_fallback_read_timeout == 90
+
+
+def test_timeout_do_fallback_precisa_ser_positivo():
+    with pytest.raises(ValueError, match="llm_fallback_read_timeout"):
+        Config(
+            llm_fallback_base_url="https://host/v1",
+            llm_fallback_model="minimax",
+            llm_fallback_read_timeout=0,
+        )

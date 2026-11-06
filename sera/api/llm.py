@@ -375,7 +375,7 @@ class ClienteOpenAICompat:
             raise ErroDoProvedor(
                 f"timeout ao falar com o provedor: {erro}",
                 codigo="timeout",
-                retentavel=True,
+                retentavel=False,
             ) from erro
         except httpx.RequestError as erro:
             raise ErroDoProvedor(

@@ -54,6 +54,7 @@ class Config:
     llm_fallback_base_url: str | None = None
     llm_fallback_api_key: str | None = None
     llm_fallback_model: str | None = None
+    llm_fallback_read_timeout: float = 120.0
     temperatura: float = 0.8
     max_tokens: int = 1024
     connect_timeout: float = 10.0
@@ -184,6 +185,10 @@ class Config:
                     f"{self.llm_fallback_base_url!r}; use uma URL http(s) "
                     "absoluta"
                 )
+            if self.llm_fallback_read_timeout <= 0:
+                raise ValueError(
+                    "llm_fallback_read_timeout precisa ser positivo"
+                )
         if self.auth_required and not self.supabase_url:
             raise ValueError(
                 "SUPABASE_URL é obrigatória quando a autenticação está ligada; "
@@ -309,6 +314,9 @@ class Config:
             llm_fallback_base_url=opcional("LLM_FALLBACK_BASE_URL"),
             llm_fallback_api_key=opcional("LLM_FALLBACK_API_KEY"),
             llm_fallback_model=opcional("LLM_FALLBACK_MODEL"),
+            llm_fallback_read_timeout=numero(
+                "LLM_FALLBACK_READ_TIMEOUT", 120.0
+            ),
             temperatura=numero("LLM_TEMPERATURE", 0.8),
             max_tokens=inteiro("LLM_MAX_TOKENS", 1024),
             connect_timeout=numero("LLM_CONNECT_TIMEOUT", 10.0),
