@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { mensagemDoErro, ehSessaoExpirada } from '../../api/erros'
 import { useSessao } from '../../auth/contexto'
@@ -28,6 +28,14 @@ import {
   rotuloLembrete,
   type Formulario,
 } from './formulario'
+import {
+  chaveDoDia,
+  contagemRegressiva,
+  faixaDeDias,
+  rotuloCurtoDoDia,
+  rotuloDoGrupo,
+} from './dias'
+import { IlustracaoVazia } from './IlustracaoVazia'
 import estilos from './Agenda.module.css'
 
 export function Agenda() {
@@ -44,7 +52,9 @@ export function Agenda() {
   const [formulario, setFormulario] = useState<Formulario>(novoFormulario)
   const [estadoNotif, setEstadoNotif] = useState<EstadoPush>('inativo')
   const [mexendoNotif, setMexendoNotif] = useState(false)
-  const [referencia, setReferencia] = useState(0)
+  const [referencia, setReferencia] = useState(() => Date.now())
+  const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
 
   const carregar = useCallback(async () => {
     if (!pessoa) return
@@ -92,16 +102,81 @@ export function Agenda() {
     [compromissos, referencia],
   )
 
+  const proximo = futuros[0] ?? null
+
+  const faixa = useMemo(
+    () =>
+      faixaDeDias(referencia).map((data) => {
+        const chave = chaveDoDia(data)
+        const itens = futuros.filter(
+          (item) => chaveDoDia(new Date(item.inicio)) === chave,
+        )
+        return { chave, data, itens }
+      }),
+    [futuros, referencia],
+  )
+
+  const visiveis = useMemo(
+    () =>
+      diaSelecionado
+        ? futuros.filter((item) => chaveDoDia(new Date(item.inicio)) === diaSelecionado)
+        : futuros,
+    [futuros, diaSelecionado],
+  )
+
   const dias = useMemo(() => {
     const mapa = new Map<string, Compromisso[]>()
-    for (const item of futuros) {
-      const chave = new Date(item.inicio).toDateString()
+    for (const item of visiveis) {
+      const chave = chaveDoDia(new Date(item.inicio))
       const lista = mapa.get(chave) ?? []
       lista.push(item)
       mapa.set(chave, lista)
     }
     return [...mapa.entries()]
-  }, [futuros])
+  }, [visiveis])
+
+  useEffect(() => {
+    if (diaSelecionado && !faixa.some((dia) => dia.chave === diaSelecionado)) {
+      setDiaSelecionado(null)
+    }
+  }, [faixa, diaSelecionado])
+
+  const atalhos = useMemo(() => {
+    const agora = new Date(referencia)
+    const daquiUmaHora = new Date(agora.getTime() + 60 * 60 * 1000)
+    const hojeNoite = new Date(agora)
+    hojeNoite.setHours(19, 0, 0, 0)
+    const amanhaManha = new Date(agora)
+    amanhaManha.setDate(amanhaManha.getDate() + 1)
+    amanhaManha.setHours(9, 0, 0, 0)
+    return [
+      { rotulo: 'Daqui a 1h', data: daquiUmaHora },
+      ...(hojeNoite.getTime() > agora.getTime()
+        ? [{ rotulo: 'Hoje 19h', data: hojeNoite }]
+        : []),
+      { rotulo: 'Amanhã 9h', data: amanhaManha },
+    ]
+  }, [referencia])
+
+  function aplicarAtalho(data: Date) {
+    const inicio = paraEntradaLocal(data.toISOString())
+    setFormulario((atual) => ({ ...atual, inicio, fim: fimPadrao(inicio) }))
+    setErro(null)
+    setAviso(null)
+  }
+
+  function focarFormulario() {
+    const reduzido = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    formRef.current?.scrollIntoView({
+      behavior: reduzido ? 'auto' : 'smooth',
+      block: 'start',
+    })
+    window.requestAnimationFrame(() => {
+      formRef.current
+        ?.querySelector<HTMLInputElement>('input')
+        ?.focus({ preventScroll: true })
+    })
+  }
 
   function limparFormulario() {
     setEditando(null)
@@ -307,7 +382,11 @@ export function Agenda() {
           <h2 className={estilos.tituloSecao}>
             {editando ? 'Editar compromisso' : 'Novo compromisso'}
           </h2>
-          <form className={estilos.formulario} onSubmit={(e) => void salvar(e)}>
+          <form
+            ref={formRef}
+            className={estilos.formulario}
+            onSubmit={(e) => void salvar(e)}
+          >
             <Campo
               rotulo="Título"
               value={formulario.titulo}
@@ -336,6 +415,24 @@ export function Agenda() {
                 }
               />
             </label>
+
+            <div
+              className={estilos.atalhos}
+              role="group"
+              aria-label="Atalhos de data e hora"
+            >
+              <span className={estilos.atalhosRotulo}>Preencher rápido</span>
+              {atalhos.map((atalho) => (
+                <button
+                  key={atalho.rotulo}
+                  type="button"
+                  className={estilos.atalho}
+                  onClick={() => aplicarAtalho(atalho.data)}
+                >
+                  {atalho.rotulo}
+                </button>
+              ))}
+            </div>
 
             <div className={estilos.duasColunas}>
               <Campo
@@ -403,56 +500,165 @@ export function Agenda() {
         </section>
 
         <section className={estilos.cartao}>
-          <h2 className={estilos.tituloSecao}>Próximos compromissos</h2>
+          <div className={estilos.listaCabecalho}>
+            <h2 className={estilos.tituloSecao}>Próximos compromissos</h2>
+            {diaSelecionado ? (
+              <button
+                type="button"
+                className={estilos.limparFiltro}
+                onClick={() => setDiaSelecionado(null)}
+              >
+                Ver todos os dias
+              </button>
+            ) : null}
+          </div>
+
+          {futuros.length > 0 ? (
+            <nav className={estilos.faixaDias} aria-label="Próximos sete dias">
+              {faixa.map((dia) => {
+                const hoje = dia.chave === chaveDoDia(new Date(referencia))
+                const selecionado = diaSelecionado === dia.chave
+                const rotulo = hoje ? 'hoje' : rotuloCurtoDoDia(dia.data)
+                const quantidade = dia.itens.length
+                return (
+                  <button
+                    key={dia.chave}
+                    type="button"
+                    className={[
+                      estilos.diaBotao,
+                      hoje ? estilos.diaBotaoHoje : '',
+                      selecionado ? estilos.diaBotaoAtivo : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    aria-pressed={selecionado}
+                    aria-label={`${
+                      hoje ? 'Hoje' : formatarDiaLongo(dia.data.toISOString())
+                    }, ${quantidade} ${
+                      quantidade === 1 ? 'compromisso' : 'compromissos'
+                    }`}
+                    onClick={() =>
+                      setDiaSelecionado((atual) =>
+                        atual === dia.chave ? null : dia.chave,
+                      )
+                    }
+                  >
+                    <span className={estilos.diaSemana}>{rotulo}</span>
+                    <span className={estilos.diaNumero}>
+                      {String(dia.data.getDate()).padStart(2, '0')}
+                    </span>
+                    <span
+                      className={`${estilos.diaContagem} ${
+                        quantidade === 0 ? estilos.diaContagemVazia : ''
+                      }`}
+                    >
+                      {quantidade || '·'}
+                    </span>
+                  </button>
+                )
+              })}
+            </nav>
+          ) : null}
+
           {carregando ? (
             <CarregandoLinha texto="Carregando sua agenda" />
+          ) : futuros.length === 0 ? (
+            <div className={estilos.vazioEstado}>
+              <IlustracaoVazia className={estilos.ilustracao} />
+              <p className={estilos.vazioTitulo}>Sua agenda está livre</p>
+              <p className={estilos.vazioTexto}>
+                Marque um compromisso e a Sera avisa você na hora certa.
+              </p>
+              <Botao
+                type="button"
+                icone={<Icone nome="mais" tamanho={16} />}
+                onClick={focarFormulario}
+              >
+                Criar primeiro compromisso
+              </Botao>
+            </div>
           ) : dias.length === 0 ? (
-            <p className={estilos.vazio}>
-              Nada marcado por enquanto. Crie o primeiro compromisso acima.
-            </p>
+            <div className={estilos.vazioEstado}>
+              <p className={estilos.vazioTitulo}>Nada marcado neste dia</p>
+              <p className={estilos.vazioTexto}>
+                Escolha outro dia ou volte para a visão completa.
+              </p>
+              <Botao
+                type="button"
+                variante="fantasma"
+                onClick={() => setDiaSelecionado(null)}
+              >
+                Ver todos os dias
+              </Botao>
+            </div>
           ) : (
             <div className={estilos.dias}>
-              {dias.map(([chave, itens]) => (
-                <div key={chave} className={estilos.dia}>
-                  <h3 className={estilos.diaTitulo}>
-                    {itens[0] ? formatarDiaLongo(itens[0].inicio) : ''}
-                  </h3>
-                  <ul className={estilos.lista}>
-                    {itens.map((item) => (
-                      <li key={item.id} className={estilos.item}>
-                        <div className={estilos.horario}>
-                          {formatarHora(item.inicio)}
-                          <span>{formatarHora(item.fim)}</span>
-                        </div>
-                        <div className={estilos.itemTexto}>
-                          <strong>{item.titulo}</strong>
-                          {item.descricao ? <p>{item.descricao}</p> : null}
-                          <span className={estilos.lembrete}>
-                            <Icone nome="relogio" tamanho={13} />
-                            {rotuloLembrete(item.lembrete_minutos)}
-                          </span>
-                        </div>
-                        <div className={estilos.itemAcoes}>
-                          <button
-                            type="button"
-                            className={estilos.acao}
-                            onClick={() => editar(item)}
+              {dias.map(([chave, itens]) => {
+                const primeiro = itens[0]
+                const hoje = chave === chaveDoDia(new Date(referencia))
+                return (
+                  <div
+                    key={chave}
+                    className={`${estilos.dia} ${hoje ? estilos.diaHoje : ''}`}
+                  >
+                    <h3 className={estilos.diaTitulo}>
+                      {primeiro
+                        ? `${rotuloDoGrupo(primeiro.inicio, referencia)} · ${formatarDiaLongo(primeiro.inicio)}`
+                        : ''}
+                    </h3>
+                    <ul className={estilos.lista}>
+                      {itens.map((item) => {
+                        const ehProximo = proximo?.id === item.id
+                        const contagem = ehProximo
+                          ? contagemRegressiva(item.inicio, item.fim, referencia)
+                          : ''
+                        return (
+                          <li
+                            key={item.id}
+                            className={`${estilos.item} ${
+                              ehProximo ? estilos.itemProximo : ''
+                            }`}
                           >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            className={`${estilos.acao} ${estilos.acaoPerigo}`}
-                            onClick={() => void apagar(item)}
-                          >
-                            Apagar
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+                            <div className={estilos.horario}>
+                              {formatarHora(item.inicio)}
+                              <span className={estilos.horarioFim}>
+                                {formatarHora(item.fim)}
+                              </span>
+                              {contagem ? (
+                                <span className={estilos.contagem}>{contagem}</span>
+                              ) : null}
+                            </div>
+                            <div className={estilos.itemTexto}>
+                              <strong>{item.titulo}</strong>
+                              {item.descricao ? <p>{item.descricao}</p> : null}
+                              <span className={estilos.lembrete}>
+                                <Icone nome="relogio" tamanho={13} />
+                                {rotuloLembrete(item.lembrete_minutos)}
+                              </span>
+                            </div>
+                            <div className={estilos.itemAcoes}>
+                              <button
+                                type="button"
+                                className={estilos.acao}
+                                onClick={() => editar(item)}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                className={`${estilos.acao} ${estilos.acaoPerigo}`}
+                                onClick={() => void apagar(item)}
+                              >
+                                Apagar
+                              </button>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                )
+              })}
             </div>
           )}
         </section>
