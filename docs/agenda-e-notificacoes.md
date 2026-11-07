@@ -102,11 +102,21 @@ novo).
 ## Disparo em produção
 
 O Render free dorme sem tráfego, então um laço em memória não basta. O
-workflow `.github/workflows/lembretes.yml` chama `/notificacoes/disparar` a
-cada 5 minutos. O mesmo endpoint também entrega o texto diário configurado
-por pessoa — veja `docs/texto-diario.md`. Configure os secrets:
+agendador principal é o `pg_cron` do Supabase, criado em
+`supabase/migrations/20261107001705_notificacoes_pgcron.sql`: a cada minuto
+ele verifica se há lembrete vencido ou texto diário pendente e, só nesse
+caso, chama `/notificacoes/disparar` via `pg_net`. Assim o Render continua
+podendo dormir quando não há nada para entregar.
 
-- `SERA_API_URL` — URL da API (ex.: `https://sera-api.onrender.com`)
+O segredo do endpoint fica no Vault do Supabase, no segredo
+`notificacoes_segredo`, com o mesmo valor de `NOTIFICACOES_SEGREDO` do
+Render. Configure-o pelo Dashboard (Project Settings → Vault) ou por
+`vault.create_secret`; a migração não grava o segredo.
+
+O workflow `.github/workflows/lembretes.yml` continua como fallback e chama
+o endpoint a cada 5 minutos. Configure os secrets:
+
+- `SERA_API_URL` — URL da API (ex.: `https://sera-api-8n2k.onrender.com`)
 - `SERA_NOTIFICACOES_SEGREDO` — o mesmo valor de `NOTIFICACOES_SEGREDO`
 
 Enquanto a API está acordada, o laço interno também dispara a cada

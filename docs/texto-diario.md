@@ -33,7 +33,8 @@ capítulo inteiro (também só o texto bíblico).
 
 ## Assinatura
 
-No Supabase, aplique `supabase/migrations/20261104000000_texto_diario.sql`.
+No Supabase, aplique `supabase/migrations/20261104000000_texto_diario.sql`
+e `supabase/migrations/20261107001705_notificacoes_pgcron.sql` (agendador).
 No SQLite local, a migração sobe sozinha na inicialização (versão 5).
 
 Uma linha por pessoa em `texto_diario_assinaturas`:
@@ -74,10 +75,11 @@ não for dita e para não repetir o texto na resposta (só confirmar).
 
 ## Disparo
 
-O endpoint `POST /notificacoes/disparar` (usado pelo workflow
-`.github/workflows/lembretes.yml` a cada 5 minutos) executa os lembretes da
-agenda **e** o texto diário. O laço interno faz o mesmo enquanto a API está
-acordada.
+O endpoint `POST /notificacoes/disparar` executa os lembretes da agenda
+**e** o texto diário. O agendador principal é o `pg_cron` do Supabase, que
+roda a cada minuto e só chama a API quando há algo vencido. O workflow
+`.github/workflows/lembretes.yml` continua como fallback a cada 5 minutos.
+O laço interno faz o mesmo enquanto a API está acordada.
 
 Para cada assinatura ativa:
 
@@ -92,9 +94,11 @@ Se a busca falhar, a reivindicação é liberada e a pessoa tenta de novo
 depois de 15 minutos (evita martelar o WOL antes de o texto ser publicado).
 Duas instâncias da API não entregam o mesmo dia duas vezes.
 
-O atraso máximo é o intervalo do cron (5 minutos). A entrega na conversa
-funciona mesmo sem VAPID; a notificação é que depende das chaves e da
-inscrição do dispositivo (Agenda → Ativar notificações).
+O atraso máximo é de cerca de 1 minuto com o `pg_cron`; o workflow do
+GitHub é só fallback. O segredo usado pelo agendador fica no Vault do
+Supabase com o nome `notificacoes_segredo`. A entrega na conversa funciona
+mesmo sem VAPID; a notificação é que depende das chaves e da inscrição do
+dispositivo (Agenda → Ativar notificações).
 
 ## Limites
 
