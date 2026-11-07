@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Composer } from './Composer'
 
@@ -15,7 +16,11 @@ function montar(extra: Partial<Parameters<typeof Composer>[0]> = {}) {
     aoAlternarJw: vi.fn(),
     ...extra,
   }
-  render(<Composer {...props} />)
+  render(
+    <MemoryRouter>
+      <Composer {...props} />
+    </MemoryRouter>,
+  )
   return { props, usuario: userEvent.setup() }
 }
 
@@ -30,6 +35,7 @@ class ReconhecedorFalso {
   lang = ''
   continuous = false
   interimResults = false
+  inicios = 0
   onresult: ((evento: unknown) => void) | null = null
   onerror: ((evento: unknown) => void) | null = null
   onend: (() => void) | null = null
@@ -38,7 +44,9 @@ class ReconhecedorFalso {
     ReconhecedorFalso.ultimo = this
   }
 
-  start() {}
+  start() {
+    this.inicios += 1
+  }
 
   stop() {
     this.onend?.()
@@ -123,7 +131,6 @@ describe('Composer no modo JW', () => {
   })
 })
 
-
 describe('Composer com voz', () => {
   it('dita e anexa o texto ao rascunho', async () => {
     ;(window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition =
@@ -138,6 +145,7 @@ describe('Composer com voz', () => {
     await usuario.click(screen.getByRole('button', { name: 'Permitir' }))
 
     await waitFor(() => expect(ReconhecedorFalso.ultimo).not.toBeNull())
+    expect(ReconhecedorFalso.ultimo?.inicios).toBe(1)
     ReconhecedorFalso.ultimo?.onresult?.({
       resultIndex: 0,
       results: {
@@ -147,5 +155,26 @@ describe('Composer com voz', () => {
     })
 
     expect(props.aoMudar).toHaveBeenCalledWith('Oi, Sera olá mundo')
+  })
+
+  it('leva aos ajustes do microfone quando a permissão é negada', async () => {
+    ;(window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition =
+      ReconhecedorFalso
+    Object.defineProperty(window, 'isSecureContext', {
+      value: true,
+      configurable: true,
+    })
+
+    const { usuario } = montar()
+    await usuario.click(screen.getByRole('button', { name: 'Ditar mensagem' }))
+    await usuario.click(screen.getByRole('button', { name: 'Permitir' }))
+
+    await waitFor(() => expect(ReconhecedorFalso.ultimo).not.toBeNull())
+    ReconhecedorFalso.ultimo?.onerror?.({ error: 'not-allowed' })
+
+    const link = await screen.findByRole('link', {
+      name: 'Abrir ajustes do microfone',
+    })
+    expect(link).toHaveAttribute('href', '/conta#microfone-titulo')
   })
 })

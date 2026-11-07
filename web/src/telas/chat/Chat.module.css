@@ -999,6 +999,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   padding: 10px 12px;
   border: 1px solid var(--perigo);
   border-left: 3px solid var(--perigo);
@@ -1006,6 +1007,37 @@
   background: rgba(220, 38, 38, 0.12);
   color: var(--chat-texto);
   font-size: 12.5px;
+}
+
+.erroVozTexto {
+  flex: 1 1 260px;
+}
+
+.erroVozAcoes {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  margin-left: auto;
+}
+
+.ajustesVoz {
+  color: var(--chat-ouro);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 1px solid transparent;
+}
+
+.ajustesVoz:hover {
+  border-bottom-color: var(--chat-ouro);
+}
+
+.ajustesVoz:focus-visible {
+  outline: 2px solid var(--chat-ouro);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .fecharErroVoz {

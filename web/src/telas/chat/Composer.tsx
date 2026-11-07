@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { LIMITE_MENSAGEM } from '../../dominios/texto'
 import { Icone } from '../../componentes/Icone'
 import {
@@ -136,6 +137,9 @@ export function Composer({
   }
 
   const podeEnviar = online && !ocupado && valor.trim().length > 0
+  const mostrarAjustesVoz =
+    erroVoz !== null &&
+    /permiss|autoriz|bloque|nenhum microfone|não iniciou/i.test(erroVoz)
 
   const enviar = () => {
     if (!podeEnviar) return
@@ -148,21 +152,32 @@ export function Composer({
       {aviso}
       {erroVoz ? (
         <div className={estilos.erroVoz} role="alert">
-          <span>{erroVoz}</span>
-          <button
-            type="button"
-            className={estilos.fecharErroVoz}
-            aria-label="Fechar aviso de voz"
-            onClick={() => setErroVoz(null)}
-          >
-            ×
-          </button>
+          <span className={estilos.erroVozTexto}>{erroVoz}</span>
+          <div className={estilos.erroVozAcoes}>
+            {mostrarAjustesVoz ? (
+              <Link
+                to="/conta#microfone-titulo"
+                className={estilos.ajustesVoz}
+                onClick={() => setErroVoz(null)}
+              >
+                Abrir ajustes do microfone
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              className={estilos.fecharErroVoz}
+              aria-label="Fechar aviso de voz"
+              onClick={() => setErroVoz(null)}
+            >
+              ×
+            </button>
+          </div>
         </div>
       ) : null}
       {!suportaVoz ? (
         <p className={estilos.vozIndisponivel}>
-          Ditado não disponível neste navegador. No iPhone, use o microfone do
-          teclado; no Android, use Chrome atualizado.
+          Ditado não disponível neste navegador. No iPhone, use o microfone do teclado;
+          no Android, use Chrome atualizado.
         </p>
       ) : null}
       {pedirConsentimento ? (
@@ -172,8 +187,8 @@ export function Composer({
           aria-label="Permissão para usar o microfone"
         >
           <p>
-            Para ditar, o navegador vai ouvir o microfone e pode enviar o
-            áudio para o serviço dele. A Sera não grava nem guarda áudio.
+            Para ditar, o navegador vai ouvir o microfone e pode enviar o áudio para o
+            serviço dele. A Sera não grava nem guarda áudio.
           </p>
           <div className={estilos.consentimentoAcoes}>
             <button
@@ -240,9 +255,7 @@ export function Composer({
         {suportaVoz ? (
           <button
             type="button"
-            className={`${estilos.microfone} ${
-              ouvindo ? estilos.microfoneAtivo : ''
-            }`}
+            className={`${estilos.microfone} ${ouvindo ? estilos.microfoneAtivo : ''}`}
             aria-pressed={ouvindo}
             aria-label={ouvindo ? 'Parar ditado' : 'Ditar mensagem'}
             title={

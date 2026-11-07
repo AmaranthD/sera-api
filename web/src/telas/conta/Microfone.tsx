@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { Botao } from '../../componentes/Botao'
 import { Icone } from '../../componentes/Icone'
-import { mensagemDeErroVoz, ouvir, reconhecimentoSuportado, type Ouvinte } from '../../voz/ouvir'
+import {
+  mensagemDeErroVoz,
+  ouvir,
+  reconhecimentoSuportado,
+  type Ouvinte,
+} from '../../voz/ouvir'
 import { useInstalacao } from '../../pwa/usePwa'
 import {
   consultarPermissaoMicrofone,
@@ -26,10 +31,10 @@ export function SecaoMicrofone() {
   const [erro, setErro] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const ouvinteRef = useRef<Ouvinte | null>(null)
+  const tituloRef = useRef<HTMLHeadingElement>(null)
   const suporta = reconhecimentoSuportado()
   const { ehIOS } = useInstalacao()
-  const temMicrofone =
-    typeof navigator !== 'undefined' && 'mediaDevices' in navigator
+  const temMicrofone = typeof navigator !== 'undefined' && 'mediaDevices' in navigator
 
   useEffect(() => {
     let ativo = true
@@ -40,6 +45,19 @@ export function SecaoMicrofone() {
       ativo = false
       ouvinteRef.current?.parar()
     }
+  }, [])
+
+  useEffect(() => {
+    if (window.location.hash !== '#microfone-titulo') return
+    const reduzido = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const quadro = window.requestAnimationFrame(() => {
+      tituloRef.current?.scrollIntoView({
+        behavior: reduzido ? 'auto' : 'smooth',
+        block: 'start',
+      })
+      tituloRef.current?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(quadro)
   }, [])
 
   const permitir = async () => {
@@ -93,13 +111,18 @@ export function SecaoMicrofone() {
 
   return (
     <section className={estilos.secao} aria-labelledby="microfone-titulo">
-      <h2 className={estilos.secaoTitulo} id="microfone-titulo">
+      <h2
+        className={estilos.secaoTitulo}
+        id="microfone-titulo"
+        ref={tituloRef}
+        tabIndex={-1}
+      >
         Microfone e voz
       </h2>
       <p className={estilos.secaoTexto}>
-        Libere o microfone neste navegador para ditar mensagens no chat. A Sera
-        não grava nem guarda o áudio; o navegador pode enviá-lo ao serviço de
-        reconhecimento dele.
+        Libere o microfone neste navegador para ditar mensagens no chat. A Sera não
+        grava nem guarda o áudio; o navegador pode enviá-lo ao serviço de reconhecimento
+        dele.
       </p>
 
       <div className={estilos.linha}>
@@ -121,8 +144,8 @@ export function SecaoMicrofone() {
 
       {!suporta ? (
         <p className={estilos.secaoTexto}>
-          Este navegador não oferece ditado por voz. No iPhone, use o microfone
-          do teclado; no Android, use o Chrome atualizado.
+          Este navegador não oferece ditado por voz. No iPhone, use o microfone do
+          teclado; no Android, use o Chrome atualizado.
         </p>
       ) : null}
 
@@ -146,9 +169,9 @@ export function SecaoMicrofone() {
       {estado === 'denied' ? (
         <div className={estilos.avisoPermissao}>
           <p className={estilos.secaoTexto}>
-            <strong>O navegador está bloqueando o microfone.</strong> Depois
-            de uma negativa, o site não consegue pedir a permissão de novo
-            sozinho; ela precisa ser liberada nas configurações.
+            <strong>O navegador está bloqueando o microfone.</strong> Depois de uma
+            negativa, o site não consegue pedir a permissão de novo sozinho; ela precisa
+            ser liberada nas configurações.
           </p>
           {ehIOS ? (
             <ol className={estilos.passos}>
@@ -158,28 +181,32 @@ export function SecaoMicrofone() {
                 <strong>Permitir</strong>.
               </li>
               <li>
-                Ou em <strong>Ajustes do iOS → Sera</strong> (ou{' '}
-                <strong>Safari</strong>) → <strong>Microfone</strong> e libere.
+                Ou em <strong>Ajustes do iOS → Sera</strong> (ou <strong>Safari</strong>
+                ) → <strong>Microfone</strong> e libere.
               </li>
               <li>
-                Se a Sera estiver na tela inicial, feche o app e abra de novo;
-                se necessário, remova e adicione outra vez.
+                Se a Sera estiver na tela inicial, feche o app e abra de novo; se
+                necessário, remova e adicione outra vez.
               </li>
             </ol>
           ) : (
             <ol className={estilos.passos}>
               <li>
-                Toque no <strong>cadeado/ícone de ajustes</strong> ao lado do
-                endereço → <strong>Permissões</strong> →{' '}
-                <strong>Microfone</strong> → <strong>Permitir</strong>.
+                Toque no <strong>cadeado/ícone de ajustes</strong> ao lado do endereço →{' '}
+                <strong>Permissões</strong> → <strong>Microfone</strong> →{' '}
+                <strong>Permitir</strong>.
               </li>
               <li>
-                Ou em <strong>Ajustes do Chrome → Configurações do site →
-                Microfone</strong> e permita para este site.
+                Ou em{' '}
+                <strong>Ajustes do Chrome → Configurações do site → Microfone</strong> e
+                permita para este site.
               </li>
               <li>
-                Se o Chrome estiver bloqueado no aparelho: <strong>Ajustes do
-                Android → Apps → Chrome → Permissões → Microfone</strong>.
+                Se o Chrome estiver bloqueado no aparelho:{' '}
+                <strong>
+                  Ajustes do Android → Apps → Chrome → Permissões → Microfone
+                </strong>
+                .
               </li>
               <li>Recarregue a página e toque em “Tentar de novo”.</li>
             </ol>
@@ -209,9 +236,7 @@ export function SecaoMicrofone() {
         {suporta ? (
           <Botao
             variante="fantasma"
-            icone={
-              <Icone nome={testando ? 'parar' : 'ouvir'} tamanho={17} />
-            }
+            icone={<Icone nome={testando ? 'parar' : 'ouvir'} tamanho={17} />}
             onClick={testar}
           >
             {testando ? 'Parar teste' : 'Testar ditado'}
